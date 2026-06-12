@@ -1,0 +1,30 @@
+[build-system]
+requires = ["setuptools>=69", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "account-recovery-guard"
+version = "0.1.0"
+description = "Local-first account recovery and password rotation assistant for Bitwarden and NordPass."
+requires-python = ">=3.11"
+dependencies = [
+  "beautifulsoup4>=4.12.3",
+  "keyring>=25.2.1",
+  "playwright>=1.44.0",
+]
+
+[project.optional-dependencies]
+dev = [
+  "pytest>=8.2.2",
+]
+
+[project.scripts]
+arg = "account_recovery_guard.cli:main"
+account-recovery-guard = "account_recovery_guard.cli:main"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["src"]
