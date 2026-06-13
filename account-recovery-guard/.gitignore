@@ -2,6 +2,7 @@
 .build-venv/
 __pycache__/
 .pytest_cache/
+.superpowers/
 *.egg-info/
 dist/
 build/
