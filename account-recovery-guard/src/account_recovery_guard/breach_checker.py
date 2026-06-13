@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import hashlib
 from dataclasses import dataclass
 from time import sleep
 from urllib.error import HTTPError
@@ -50,6 +51,18 @@ class HibpBreachChecker:
             sleep(self.delay_seconds)
         return parse_hibp_breaches(payload)
 
+    def pwned_password_count(self, password: str) -> int:
+        digest = hashlib.sha1(password.encode("utf-8")).hexdigest().upper()
+        prefix, suffix = digest[:5], digest[5:]
+        request = Request(
+            f"https://api.pwnedpasswords.com/range/{prefix}",
+            headers={"user-agent": self.user_agent, "add-padding": "true"},
+            method="GET",
+        )
+        with urlopen(request, timeout=20) as response:
+            payload = response.read()
+        return parse_pwned_password_suffixes(payload, suffix)
+
 
 def parse_hibp_breaches(payload: bytes) -> list[HibpBreach]:
     data = json.loads(payload.decode("utf-8"))
@@ -58,3 +71,17 @@ def parse_hibp_breaches(payload: bytes) -> list[HibpBreach]:
         if isinstance(item, dict) and item.get("Name"):
             breaches.append(HibpBreach(name=str(item["Name"])))
     return breaches
+
+
+def parse_pwned_password_suffixes(payload: bytes, wanted_suffix: str) -> int:
+    wanted = wanted_suffix.upper()
+    for raw_line in payload.decode("utf-8", errors="replace").splitlines():
+        if ":" not in raw_line:
+            continue
+        suffix, count = raw_line.split(":", 1)
+        if suffix.strip().upper() == wanted:
+            try:
+                return int(count.strip())
+            except ValueError:
+                return 0
+    return 0

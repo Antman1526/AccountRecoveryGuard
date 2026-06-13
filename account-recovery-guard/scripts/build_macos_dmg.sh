@@ -15,17 +15,28 @@ PYTHON_BIN="$BUILD_VENV/bin/python"
 "$PYTHON_BIN" -m pip install -e .
 
 rm -rf build dist
-"$PYTHON_BIN" -m PyInstaller \
-  --onefile \
-  --name AccountRecoveryGuard \
-  --clean \
-  packaging/account_recovery_guard_entry.py
+PYINSTALLER_ARGS=(
+  --name AccountRecoveryGuard
+  --clean
+  --windowed
+)
+
+if [[ -n "${MACOS_CODESIGN_IDENTITY:-}" ]]; then
+  PYINSTALLER_ARGS+=(--codesign-identity "$MACOS_CODESIGN_IDENTITY")
+  PYINSTALLER_ARGS+=(--osx-entitlements-file packaging/macos-entitlements.plist)
+fi
+
+"$PYTHON_BIN" -m PyInstaller "${PYINSTALLER_ARGS[@]}" packaging/account_recovery_guard_entry.py
 
 DMG_ROOT="dist/dmg-root"
 DMG_PATH="dist/AccountRecoveryGuard-macOS.dmg"
 rm -rf "$DMG_ROOT" "$DMG_PATH"
 mkdir -p "$DMG_ROOT"
-cp "dist/AccountRecoveryGuard" "$DMG_ROOT/AccountRecoveryGuard"
+if [[ -d "dist/AccountRecoveryGuard.app" ]]; then
+  cp -R "dist/AccountRecoveryGuard.app" "$DMG_ROOT/AccountRecoveryGuard.app"
+else
+  cp "dist/AccountRecoveryGuard" "$DMG_ROOT/AccountRecoveryGuard"
+fi
 cp README.md "$DMG_ROOT/README.md"
 
 hdiutil create \
@@ -35,4 +46,5 @@ hdiutil create \
   -format UDZO \
   "$DMG_PATH"
 
+"$PYTHON_BIN" scripts/checksums.py "$DMG_PATH" > "dist/AccountRecoveryGuard-macOS.dmg.sha256"
 echo "Created $DMG_PATH"

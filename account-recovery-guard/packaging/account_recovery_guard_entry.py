@@ -1,4 +1,4 @@
-from account_recovery_guard.cli import main
+from account_recovery_guard.gui import main
 
 
 if __name__ == "__main__":

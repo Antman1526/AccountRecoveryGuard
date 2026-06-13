@@ -13,10 +13,19 @@ $PythonExe = Join-Path $BuildVenv "Scripts\python.exe"
 & $PythonExe -m pip install -e .
 
 Remove-Item -Recurse -Force build, dist -ErrorAction SilentlyContinue
-& $PythonExe -m PyInstaller `
-  --onefile `
-  --name AccountRecoveryGuard `
-  --clean `
-  packaging/account_recovery_guard_entry.py
+$PyinstallerArgs = @(
+  "--onefile",
+  "--name", "AccountRecoveryGuard",
+  "--clean",
+  "--windowed"
+)
+
+& $PythonExe -m PyInstaller @PyinstallerArgs packaging/account_recovery_guard_entry.py
+
+if ($env:WINDOWS_SIGNTOOL_PATH -and $env:WINDOWS_CERT_SHA1) {
+  & $env:WINDOWS_SIGNTOOL_PATH sign /sha1 $env:WINDOWS_CERT_SHA1 /fd SHA256 /tr http://timestamp.digicert.com /td SHA256 dist\AccountRecoveryGuard.exe
+}
+
+& $PythonExe scripts\checksums.py dist\AccountRecoveryGuard.exe | Out-File -Encoding ascii dist\AccountRecoveryGuard.exe.sha256
 
 Write-Host "Created dist\AccountRecoveryGuard.exe"

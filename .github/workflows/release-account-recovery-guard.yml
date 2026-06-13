@@ -1,0 +1,34 @@
+name: Release Account Recovery Guard
+
+on:
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Release tag, for example v0.2.0"
+        required: true
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    uses: ./.github/workflows/build-account-recovery-guard.yml
+
+  release:
+    runs-on: ubuntu-latest
+    needs: build
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+      - name: Create GitHub Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ inputs.tag }}
+        run: |
+          find artifacts -type f -maxdepth 3 -print
+          gh release create "$TAG" \
+            --title "Account Recovery Guard $TAG" \
+            --notes "Automated release. Verify SHA256 checksums before running artifacts." \
+            artifacts/**/*

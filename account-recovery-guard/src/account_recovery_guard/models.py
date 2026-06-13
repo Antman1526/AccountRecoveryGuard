@@ -68,5 +68,25 @@ class AccountRisk:
     service_name: str
     sender_domain: str
     compromised: bool
+    score: int = 0
     reasons: list[str] = field(default_factory=list)
     breach_names: list[str] = field(default_factory=list)
+
+
+@dataclass(frozen=True)
+class RotationChoiceSummary:
+    index: int
+    display: str
+    length: int
+    has_uppercase: bool
+    has_lowercase: bool
+    has_digit: bool
+    has_symbol: bool
+
+
+@dataclass(frozen=True)
+class VaultDashboardRow:
+    service_name: str
+    username: str
+    status: Literal["in_sync", "drift", "bitwarden_only", "nordpass_only"]
+    differences: list[str] = field(default_factory=list)

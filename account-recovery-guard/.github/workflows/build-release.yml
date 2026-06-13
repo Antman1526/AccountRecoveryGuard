@@ -1,6 +1,7 @@
 name: Build Account Recovery Guard
 
 on:
+  workflow_call:
   workflow_dispatch:
   push:
     branches: [main]
@@ -39,7 +40,9 @@ jobs:
       - uses: actions/upload-artifact@v4
         with:
           name: AccountRecoveryGuard-macOS-dmg
-          path: account-recovery-guard/dist/AccountRecoveryGuard-macOS.dmg
+          path: |
+            account-recovery-guard/dist/AccountRecoveryGuard-macOS.dmg
+            account-recovery-guard/dist/AccountRecoveryGuard-macOS.dmg.sha256
 
   windows-exe:
     runs-on: windows-latest
@@ -57,4 +60,6 @@ jobs:
       - uses: actions/upload-artifact@v4
         with:
           name: AccountRecoveryGuard-Windows-exe
-          path: account-recovery-guard/dist/AccountRecoveryGuard.exe
+          path: |
+            account-recovery-guard/dist/AccountRecoveryGuard.exe
+            account-recovery-guard/dist/AccountRecoveryGuard.exe.sha256

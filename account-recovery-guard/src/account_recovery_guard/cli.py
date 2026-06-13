@@ -7,14 +7,19 @@ from pathlib import Path
 from .account_discovery import AccountDiscovery
 from .audit import AuditLogger
 from .breach_checker import HibpBreachChecker
+from .clipboard import copy_text
 from .email_scanner import ImapEmailScanner, ImapMailboxConfig
+from .gui import main as gui_main
 from .models import PasswordCandidate, VaultEntry
+from .oauth_mail import GmailApiMailProvider, GmailOAuthConfig, GraphOAuthConfig, MicrosoftGraphMailProvider
+from .passkeys import passkey_guidance
 from .passwords import PasswordPolicy, fingerprint_password, generate_passphrase, generate_password
 from .paths import user_state_dir
 from .reset_orchestrator import PasswordResetOrchestrator, open_reset_link
-from .rotation import build_rotation_choices
+from .rotation import build_rotation_choices, summarize_rotation_choices
+from .secure_files import delete_file, plaintext_file_warning
 from .secure_store import get_secret, set_secret
-from .sync import compare_vault_entries
+from .sync import build_vault_dashboard, compare_vault_entries
 from .vaults import BitwardenVault, NordPassImportVault
 
 
@@ -25,6 +30,8 @@ def main() -> None:
     secret = sub.add_parser("secret", help="Store an OS-keychain secret")
     secret.add_argument("name")
     secret.add_argument("value")
+
+    sub.add_parser("gui", help="Launch the desktop dashboard")
 
     scan = sub.add_parser("scan-imap", help="Scan an IMAP mailbox for risky account alerts")
     scan.add_argument("--host", required=True)
@@ -42,10 +49,27 @@ def main() -> None:
     discover.add_argument("--folder", default="INBOX")
     discover.add_argument("--json", action="store_true")
 
+    scan_gmail = sub.add_parser("scan-gmail", help="Scan Gmail with OAuth and the Gmail API")
+    scan_gmail.add_argument("--client-secret-file", required=True)
+    scan_gmail.add_argument("--token-secret-name", default="gmail-oauth-token")
+    scan_gmail.add_argument("--days", type=int, default=30)
+    scan_gmail.add_argument("--json", action="store_true")
+
+    scan_graph = sub.add_parser("scan-graph", help="Scan Outlook/Microsoft 365 with Microsoft Graph device-code auth")
+    scan_graph.add_argument("--tenant-id", default="common")
+    scan_graph.add_argument("--client-id", required=True)
+    scan_graph.add_argument("--token-secret-name", default="graph-oauth-token")
+    scan_graph.add_argument("--days", type=int, default=30)
+    scan_graph.add_argument("--json", action="store_true")
+
     breach = sub.add_parser("breach-check", help="Check an email address against Have I Been Pwned")
     breach.add_argument("--email", required=True)
     breach.add_argument("--hibp-secret", required=True, help="OS-keychain secret containing the HIBP API key")
     breach.add_argument("--json", action="store_true")
+
+    pwned_password = sub.add_parser("pwned-password", help="Check a password against HIBP Pwned Passwords k-anonymity API")
+    pwned_password.add_argument("--password-secret", required=True)
+    pwned_password.add_argument("--hibp-secret", required=True)
 
     generate = sub.add_parser("generate-password", help="Generate a replacement password")
     generate.add_argument("--length", type=int, default=32)
@@ -65,6 +89,8 @@ def main() -> None:
     rotate.add_argument("--nordpass-csv", default=str(default_data_path() / "nordpass-import.csv"))
     rotate.add_argument("--skip-bitwarden", action="store_true")
     rotate.add_argument("--open", action="store_true", help="Open reset link in Playwright before vault write")
+    rotate.add_argument("--reveal-all", action="store_true", help="Unsafe: print every generated plaintext choice")
+    rotate.add_argument("--copy-selected", action="store_true", help="Copy selected password to clipboard and clear it after 60 seconds")
 
     write = sub.add_parser("write-vaults", help="Write Bitwarden and stage NordPass import CSV")
     write.add_argument("--service", required=True)
@@ -81,16 +107,38 @@ def main() -> None:
     verify.add_argument("--url")
     verify.add_argument("--nordpass-export", required=True)
 
+    dashboard = sub.add_parser("vault-dashboard", help="Show all Bitwarden/NordPass drift rows from export files")
+    dashboard.add_argument("--bitwarden-export", required=True)
+    dashboard.add_argument("--nordpass-export", required=True)
+
+    passkey = sub.add_parser("passkey-guidance", help="Show safe passkey enrollment guidance")
+    passkey.add_argument("--service", required=True)
+
+    csv = sub.add_parser("csv-status", help="Warn about or delete staged plaintext NordPass CSV files")
+    csv.add_argument("path")
+    csv.add_argument("--ttl-seconds", type=int, default=300)
+    csv.add_argument("--delete", action="store_true")
+
     args = parser.parse_args()
     if args.command == "secret":
         set_secret(args.name, args.value)
         print(f"Stored secret '{args.name}' in the OS credential store.")
+    elif args.command == "gui":
+        raise SystemExit(gui_main())
     elif args.command == "scan-imap":
         _scan_imap(args)
     elif args.command == "discover-imap":
         _discover_imap(args)
+    elif args.command == "scan-gmail":
+        provider = GmailApiMailProvider(GmailOAuthConfig(args.client_secret_file, args.token_secret_name))
+        _classify_messages(provider.fetch_messages(args.days), args)
+    elif args.command == "scan-graph":
+        provider = MicrosoftGraphMailProvider(GraphOAuthConfig(args.tenant_id, args.client_id, args.token_secret_name))
+        _classify_messages(provider.fetch_messages(args.days), args)
     elif args.command == "breach-check":
         _breach_check(args)
+    elif args.command == "pwned-password":
+        _pwned_password(args)
     elif args.command == "generate-password":
         if args.passphrase:
             print(generate_passphrase(word_count=args.words))
@@ -104,6 +152,13 @@ def main() -> None:
         _write_vaults(args)
     elif args.command == "verify-sync":
         _verify_sync(args)
+    elif args.command == "vault-dashboard":
+        _vault_dashboard(args)
+    elif args.command == "passkey-guidance":
+        for step in passkey_guidance(args.service):
+            print(f"- {step}")
+    elif args.command == "csv-status":
+        _csv_status(args)
 
 
 def _scan_imap(args: argparse.Namespace) -> None:
@@ -120,7 +175,20 @@ def _scan_imap(args: argparse.Namespace) -> None:
         )
     ).scan()
     AuditLogger().write("email_scan", host=args.host, username=args.username, days=args.days, finding_count=len(findings))
-    if args.json:
+    _print_findings(findings, args.json)
+
+
+def _classify_messages(messages, args: argparse.Namespace) -> None:
+    from .email_scanner import EmailClassifier
+
+    classifier = EmailClassifier()
+    findings = [finding for message in messages if (finding := classifier.classify(message))]
+    AuditLogger().write("oauth_email_scan", days=args.days, finding_count=len(findings))
+    _print_findings(findings, args.json)
+
+
+def _print_findings(findings, as_json: bool) -> None:
+    if as_json:
         print(json.dumps([_finding_to_dict(finding) for finding in findings], indent=2, default=str))
         return
     for finding in findings:
@@ -170,6 +238,21 @@ def _breach_check(args: argparse.Namespace) -> None:
         print(f"  - {breach.name}")
 
 
+def _pwned_password(args: argparse.Namespace) -> None:
+    password = get_secret(args.password_secret)
+    api_key = get_secret(args.hibp_secret)
+    if not password:
+        raise SystemExit(f"Secret '{args.password_secret}' was not found.")
+    if not api_key:
+        raise SystemExit(f"Secret '{args.hibp_secret}' was not found.")
+    count = HibpBreachChecker(api_key).pwned_password_count(password)
+    AuditLogger().write("hibp_pwned_password_check", count=count)
+    if count:
+        print(f"Password appears {count} time(s) in HIBP Pwned Passwords. Do not use it.")
+    else:
+        print("Password was not found in HIBP Pwned Passwords.")
+
+
 def _workflow(args: argparse.Namespace) -> None:
     data = json.loads(Path(args.finding_json).read_text(encoding="utf-8"))
     finding = _finding_from_dict(data)
@@ -182,9 +265,14 @@ def _workflow(args: argparse.Namespace) -> None:
 
 def _rotate(args: argparse.Namespace) -> None:
     choices = build_rotation_choices(args.service, args.username, args.url, count=5, length=args.length)
-    print("Generated five local password candidates. They are shown once; do not paste them into chat or logs.")
-    for index, candidate in enumerate(choices, start=1):
-        print(f"{index}. {candidate.password}")
+    print("Generated five local password candidates. Passwords are masked by default.")
+    summaries = summarize_rotation_choices([candidate.password for candidate in choices])
+    for summary, candidate in zip(summaries, choices):
+        display = candidate.password if args.reveal_all else summary.display
+        print(
+            f"{summary.index}. {display}  length={summary.length} "
+            f"upper={summary.has_uppercase} lower={summary.has_lowercase} digit={summary.has_digit} symbol={summary.has_symbol}"
+        )
     selection = input("Select password 1-5, or q to abort: ").strip().lower()
     if selection == "q":
         raise SystemExit("Rotation aborted.")
@@ -192,6 +280,12 @@ def _rotate(args: argparse.Namespace) -> None:
         selected = choices[int(selection) - 1]
     except (ValueError, IndexError) as exc:
         raise SystemExit("Invalid password selection.") from exc
+    print(f"Selected password: {selected.password}")
+    if args.copy_selected:
+        if copy_text(selected.password, clear_after_seconds=60):
+            print("Selected password copied to clipboard; clipboard clear scheduled in 60 seconds.")
+        else:
+            print("Clipboard copy is not available on this platform/session.")
     if args.open and args.reset_link:
         open_reset_link(args.reset_link)
     confirmation = input("After changing the password on the service, type ROTATED to update vaults: ").strip()
@@ -246,6 +340,25 @@ def _verify_sync(args: argparse.Namespace) -> None:
     report = compare_vault_entries(bitwarden_entry, matching)
     AuditLogger().write("sync_verified", service=args.service, username=args.username, in_sync=report.in_sync)
     print(json.dumps(report.__dict__, indent=2))
+
+
+def _vault_dashboard(args: argparse.Namespace) -> None:
+    bitwarden_entries = NordPassImportVault().read_export(Path(args.bitwarden_export))
+    nordpass_entries = NordPassImportVault().read_export(Path(args.nordpass_export))
+    rows = build_vault_dashboard(bitwarden_entries, nordpass_entries)
+    for row in rows:
+        print(f"[{row.status}] {row.service_name} / {row.username}")
+        if row.differences:
+            print(f"  differences: {', '.join(row.differences)}")
+
+
+def _csv_status(args: argparse.Namespace) -> None:
+    path = Path(args.path)
+    if args.delete:
+        deleted = delete_file(path)
+        print("Deleted." if deleted else "File not found.")
+        return
+    print(plaintext_file_warning(path, args.ttl_seconds) or "CSV is not stale or does not exist.")
 
 
 def _finding_to_dict(finding) -> dict[str, object]:

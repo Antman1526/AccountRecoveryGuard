@@ -4,7 +4,7 @@ Local-first account recovery and password rotation assistant for macOS and Windo
 
 ## Recommended Approach
 
-Use a single Python 3.11+ codebase with a CLI first, then add a GUI later if needed. Python gives strong cross-platform parity, stable IMAP support in the standard library, a mature OS credential-store wrapper, and direct subprocess integration with the Bitwarden CLI. The tool intentionally avoids full reset-form automation because password reset pages vary, use MFA/CAPTCHA, and are high-risk if scripted blindly.
+Use a single Python 3.11+ codebase with a CLI and a PySide6 desktop GUI. Python gives strong cross-platform parity, stable IMAP support in the standard library, OAuth provider libraries for Gmail/Microsoft Graph, a mature OS credential-store wrapper, and direct subprocess integration with the Bitwarden CLI. The tool intentionally avoids full reset-form automation because password reset pages vary, use MFA/CAPTCHA, and are high-risk if scripted blindly.
 
 Critical decision: Bitwarden can be written programmatically through the official `bw` CLI. NordPass personal vaults do not expose an equivalent public CRUD API, so this project stages a NordPass CSV import file and verifies sync from a NordPass export. Browser-extension scraping is deliberately not implemented.
 
@@ -21,10 +21,13 @@ Bitwarden and NordPass are therefore not "linked" as one live vault. This tool a
 
 ```mermaid
 flowchart TD
-  User["User on macOS or Windows"] --> CLI["CLI: account-recovery-guard / arg"]
-  CLI --> Keychain["OS secure store\nmacOS Keychain / Windows Credential Locker"]
+  User["User on macOS or Windows"] --> UI["PySide6 GUI or CLI"]
+  UI --> Keychain["OS secure store\nmacOS Keychain / Windows Credential Locker"]
+  UI --> CLI["CLI backend commands"]
   CLI --> Scanner["Email scanner\nIMAP provider"]
+  CLI --> OAuth["OAuth mail adapters\nGmail API / Microsoft Graph"]
   Scanner --> Classifier["Risk classifier\nbreach/login/reset patterns"]
+  OAuth --> Classifier
   Classifier --> Findings["Compromised account findings"]
   Findings --> Reset["Reset workflow builder\nmanual-safe Playwright opener"]
   Reset --> Generator["Password generator"]
@@ -48,13 +51,21 @@ For Gmail and Outlook/Microsoft 365, the more robust long-term approach is provi
 - Microsoft Graph Mail API: best for Outlook/Microsoft 365 and supports mailbox message listing.
 - IMAP: easiest to run locally, but weaker than OAuth provider APIs and often requires app passwords.
 
-Current code ships IMAP because it is complete and cross-provider. Provider-specific Gmail/Graph adapters can be added behind the same scanner/classifier boundary.
+Current code ships IMAP plus optional OAuth adapters:
+
+- `scan-gmail` uses Gmail API OAuth with a local browser consent flow and stores the token JSON in the OS credential store.
+- `scan-graph` uses Microsoft Graph with MSAL device-code flow and stores the token cache in the OS credential store.
+- `scan-imap` remains the fallback for providers without OAuth setup.
 
 ## Web Breach Checking
 
 The `breach-check` command integrates with Have I Been Pwned (HIBP) for account-level breach checks. HIBP breached-account checks require an API key and send the searched email address to HIBP. The tool stores the HIBP key in the OS credential store and logs only breach counts, not the API key.
 
 This tells you whether the email address appeared in known breach datasets. It does not prove that every linked service account is compromised, and it cannot detect private breaches HIBP does not have.
+
+The `pwned-password` command uses the HIBP Pwned Passwords k-anonymity range API. Only the first five SHA-1 hash characters are sent to HIBP; the plaintext password is read from the OS credential store and is never logged.
+
+Risk scoring combines mailbox findings, discovery confidence, breach names, reused-password evidence, and MFA unknown status. Scores are local signals for prioritization, not proof of compromise.
 
 ## Vault Integration
 
@@ -68,6 +79,8 @@ NordPass:
 - Stages a CSV import file formatted for NordPass import.
 - You import it manually in NordPass, then export from NordPass and run `verify-sync`.
 - The CSV necessarily contains plaintext passwords because NordPass import requires that form. It is written with restrictive permissions where the OS allows it and must be deleted after import.
+- `csv-status` warns about stale plaintext NordPass CSV files and can delete them after import.
+- `vault-dashboard` compares exported Bitwarden/NordPass CSVs and reports `in_sync`, `drift`, `bitwarden_only`, and `nordpass_only` rows.
 
 ## Passkeys and Device Storage
 
@@ -77,6 +90,8 @@ Passkeys are not a general-purpose encrypted storage bucket for arbitrary accoun
 - Windows: Credential Locker, which can be protected by your Windows account and Windows Hello policies.
 
 Bitwarden and NordPass can store and sync passkeys for websites that support them, but this CLI cannot safely create passkeys for third-party websites on your behalf. During password rotation, use the service's official passkey enrollment flow manually when available, then save that passkey in your chosen password manager.
+
+Use `passkey-guidance --service <name>` for safe enrollment steps. The GUI also includes a passkey guidance panel.
 
 ## Security Design
 
@@ -92,6 +107,7 @@ MFA:
 - Playwright only opens an extracted reset link in a visible browser for manual completion.
 - You remain responsible for confirming the domain before entering a generated password.
 - The `rotate` command requires you to type `ROTATED` before vault writes so the vault does not get ahead of the real account state.
+- `rotate` masks the five generated choices by default and reveals only the selected password. `--copy-selected` copies it to the clipboard and schedules clipboard clearing after 60 seconds when the platform supports it.
 
 Logging:
 
@@ -114,6 +130,7 @@ source .venv/bin/activate
 python -m pip install --upgrade pip
 python -m pip install -r requirements.txt
 python -m pip install -e .
+python -m pip install ".[gui,oauth]"
 python -m playwright install chromium
 ```
 
@@ -136,6 +153,7 @@ py -3.11 -m venv .venv
 python -m pip install --upgrade pip
 python -m pip install -r requirements.txt
 python -m pip install -e .
+python -m pip install ".[gui,oauth]"
 python -m playwright install chromium
 ```
 
@@ -163,6 +181,18 @@ Discover likely linked accounts from inbox evidence:
 arg discover-imap --host imap.gmail.com --username you@gmail.com --secret-name gmail-imap-app-password --days 365
 ```
 
+For Gmail OAuth:
+
+```bash
+arg scan-gmail --client-secret-file /path/to/google-oauth-client.json --days 30
+```
+
+For Microsoft Graph device-code auth:
+
+```bash
+arg scan-graph --tenant-id common --client-id YOUR_ENTRA_APP_CLIENT_ID --days 30
+```
+
 Gmail notes:
 
 - Prefer OAuth/Gmail API for production.
@@ -182,11 +212,25 @@ arg generate-password --length 32
 arg generate-password --passphrase --words 6
 ```
 
+Launch the desktop GUI:
+
+```bash
+arg gui
+account-recovery-guard-gui
+```
+
 Check an email address against Have I Been Pwned:
 
 ```bash
 arg secret hibp-api-key "YOUR_HIBP_API_KEY"
 arg breach-check --email you@example.com --hibp-secret hibp-api-key
+```
+
+Check a candidate password against HIBP Pwned Passwords:
+
+```bash
+arg secret candidate-password "PASTE_CANDIDATE"
+arg pwned-password --password-secret candidate-password --hibp-secret hibp-api-key
 ```
 
 Rotate with five local password choices:
@@ -197,10 +241,11 @@ arg rotate \
   --username you@example.com \
   --url https://example.com \
   --reset-link https://example.com/reset \
-  --open
+  --open \
+  --copy-selected
 ```
 
-The command shows five generated passwords once, opens the reset link if requested, waits for you to complete MFA/CAPTCHA/passkey prompts manually, then only writes vaults after you type `ROTATED`.
+The command shows five masked generated passwords, reveals only the one you choose, opens the reset link if requested, waits for you to complete MFA/CAPTCHA/passkey prompts manually, then only writes vaults after you type `ROTATED`.
 
 Store a generated password in the OS credential store:
 
@@ -228,6 +273,25 @@ arg verify-sync \
   --nordpass-export /path/to/nordpass-export.csv
 ```
 
+Show a broader drift dashboard from vault exports:
+
+```bash
+arg vault-dashboard --bitwarden-export bitwarden.csv --nordpass-export nordpass.csv
+```
+
+Check or delete a staged plaintext NordPass CSV:
+
+```bash
+arg csv-status /path/to/nordpass-import.csv
+arg csv-status /path/to/nordpass-import.csv --delete
+```
+
+Show passkey enrollment guidance:
+
+```bash
+arg passkey-guidance --service GitHub
+```
+
 Run tests:
 
 ```bash
@@ -249,6 +313,19 @@ Build a Windows `.exe` on Windows:
 
 The GitHub Actions workflow at `.github/workflows/build-release.yml` builds both artifacts on native runners and uploads them as workflow artifacts.
 
+Signing hooks:
+
+- macOS: set `MACOS_CODESIGN_IDENTITY` before `scripts/build_macos_dmg.sh`. The script passes the identity and `packaging/macos-entitlements.plist` to PyInstaller.
+- Windows: set `WINDOWS_SIGNTOOL_PATH` and `WINDOWS_CERT_SHA1` before `scripts/build_windows_exe.ps1`.
+- Without signing variables, builds are development artifacts and may trigger OS warnings.
+- Both packaging scripts emit SHA256 checksum files.
+
+Create a GitHub Release:
+
+```bash
+gh workflow run release-account-recovery-guard.yml -R Antman1526/RPHE_Codex -f tag=v0.2.0
+```
+
 Uninstall:
 
 ```bash
@@ -269,6 +346,8 @@ account-recovery-guard/
   .gitignore                        Ignores venvs, caches, build output, CSVs, and logs.
   .github/workflows/build-release.yml GitHub Actions workflow for tests, macOS DMG, and Windows EXE.
   packaging/account_recovery_guard_entry.py PyInstaller entrypoint.
+  packaging/macos-entitlements.plist macOS hardened-runtime entitlements template.
+  scripts/checksums.py               Generates SHA256 checksum files for release artifacts.
   scripts/build_macos_dmg.sh        Builds one-file macOS binary and DMG.
   scripts/build_windows_exe.ps1     Builds one-file Windows EXE.
   src/account_recovery_guard/
@@ -276,13 +355,19 @@ account-recovery-guard/
     account_discovery.py            Discovers likely linked services from authorized mailbox evidence.
     audit.py                        Redacted JSONL audit logger.
     breach_checker.py               Have I Been Pwned breached-account client.
+    clipboard.py                     Clipboard copy with delayed clear where supported.
     cli.py                          Cross-platform command-line interface.
     email_scanner.py                IMAP scanner, body extraction, classifier, link extraction.
+    gui.py                          PySide6 desktop dashboard.
     models.py                       Dataclasses shared across modules.
+    oauth_mail.py                    Gmail API and Microsoft Graph OAuth mail adapters.
+    passkeys.py                     Passkey support guidance.
     passwords.py                    Strong password/passphrase generation and fingerprinting.
     paths.py                        Cross-platform app data/log path helpers.
     reset_orchestrator.py           Manual-safe password reset workflow and Playwright opener.
+    risk.py                         Local account risk scoring.
     rotation.py                     Five-choice password rotation helper.
+    secure_files.py                 Plaintext CSV warning/deletion helpers.
     secure_store.py                 OS credential-store wrapper.
     sync.py                         Vault drift comparison.
     vaults.py                       Bitwarden CLI adapter and NordPass import/export adapter.
@@ -293,6 +378,11 @@ account-recovery-guard/
     test_email_classifier.py        Verifies risky email classification and reset-link extraction.
     test_passwords.py               Verifies password/passphrase generation constraints.
     test_rotation.py                Verifies five unique password choices.
+    test_rotation_safety.py         Verifies masked password choice display.
+    test_pwned_passwords.py         Verifies HIBP k-anonymity response parsing.
+    test_risk.py                    Verifies local risk scoring.
+    test_secure_files.py            Verifies stale CSV warnings.
+    test_vault_dashboard.py         Verifies vault drift dashboard rows.
     test_sync.py                    Verifies vault drift detection.
 ```
 
@@ -302,8 +392,11 @@ account-recovery-guard/
 - NordPass personal vault writes are not fully automatable through an official public CRUD API. CSV import/export is the safest supported path today.
 - NordPass import/export CSVs contain plaintext passwords. Keep them local, import immediately, verify, then delete.
 - IMAP scanning is practical but not ideal. Gmail API and Microsoft Graph adapters should be added for stronger OAuth-based production use.
+- Gmail API and Microsoft Graph adapters require you to create OAuth app credentials in Google Cloud or Microsoft Entra.
 - The tool does not decide that an account is definitely compromised; it flags risk signals for review.
 - HIBP breached-account checks disclose the searched email address to HIBP and require a paid API key.
+- Passkey creation remains a manual service-specific enrollment process.
+- Signing requires your Apple Developer ID certificate and Windows code-signing certificate.
 - A local macOS machine can create the `.dmg`; the Windows `.exe` should be built on Windows or via the included GitHub Actions workflow.
 
 ## Sources Checked
@@ -314,7 +407,12 @@ account-recovery-guard/
 - NordPass passkey support overview: https://support.nordpass.com/hc/en-us/articles/12984678202641-Passkeys-FAQs
 - NordPass import workflow: https://nordpass.com/features/import-password-securely/
 - Gmail app-password requirements: https://support.google.com/mail/answer/185833
+- Gmail API Python quickstart and OAuth client-library pattern: https://developers.google.com/workspace/gmail/api/quickstart/python
 - Microsoft Graph mail messages: https://learn.microsoft.com/en-us/graph/api/user-list-messages?view=graph-rest-1.0
+- Microsoft Graph Python device-code authentication: https://learn.microsoft.com/en-us/graph/tutorials/python-authentication
+- Microsoft identity platform device-code flow: https://learn.microsoft.com/en-us/entra/identity-platform/scenario-desktop-acquire-token-device-code-flow
+- PySide6 widgets and QMainWindow: https://doc.qt.io/qtforpython-6/PySide6/QtWidgets/index.html
+- PyInstaller macOS signing options: https://pyinstaller.org/en/v6.7.0/feature-notes.html
 - Python keyring supported backends: https://pypi.org/project/keyring/
 - Playwright browser installation: https://playwright.dev/python/docs/browsers
 - Have I Been Pwned API v3 breached-account behavior: https://haveibeenpwned.com/api/v3
