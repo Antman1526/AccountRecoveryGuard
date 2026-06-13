@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import sys
+import webbrowser
 from pathlib import Path
 
 from .clipboard import copy_text
@@ -45,6 +46,7 @@ def main() -> int:
     from .gui_components import Card, ProviderButton, StepHeader, StatusPill
     from .gui_services import (
         GuiScanService,
+        GuiRotationService,
         MailProviderSettings,
         SETUP_DETAIL_MISSING_PROVIDER,
         SETUP_DETAIL_MISSING_PROVIDER_INSTANCE,
@@ -346,7 +348,7 @@ def main() -> int:
             review = QPushButton("Review account")
             review.setObjectName("primaryButton")
             review.setCursor(Qt.CursorShape.PointingHandCursor)
-            review.clicked.connect(lambda checked=False, selected=account: self._show_account_review_placeholder(selected))
+            review.clicked.connect(lambda checked=False, selected=account: self._open_rotation_for_account(selected))
             all_accounts = QPushButton("All accounts list available after real scan")
             all_accounts.setObjectName("secondaryButton")
             all_accounts.setEnabled(False)
@@ -407,12 +409,15 @@ def main() -> int:
                 elif child_layout is not None:
                     self._clear_layout(child_layout)
 
-        def _show_account_review_placeholder(self, account: AccountReview) -> None:
-            self.state = self.state.show_account_review(account)
+        def _open_rotation_for_account(self, account: AccountReview) -> None:
+            session = GuiRotationService().start(account.service_name, account.username, account.url)
+            self.state = self.state.start_guided_rotation(account, session)
+            self._render_rotation_panel()
             self.stack.setCurrentIndex(4)
 
         def _show_guided_rotation_placeholder(self) -> None:
             self.state = self.state.show_guided_rotation_placeholder()
+            self._render_rotation_panel()
             self.stack.setCurrentIndex(4)
 
         def _show_results(self) -> None:
@@ -425,45 +430,140 @@ def main() -> int:
 
         def _guided_rotation_placeholder_page(self) -> QScrollArea:
             page, layout = self._wizard_page()
-            layout.addWidget(
+            self.rotation_layout = layout
+            self._render_rotation_panel()
+            return page
+
+        def _render_rotation_panel(self) -> None:
+            self._clear_layout(self.rotation_layout)
+            account = self.state.selected_account
+            session = self.state.rotation_session
+            if account is None or session is None:
+                self.rotation_layout.addWidget(
+                    StepHeader(
+                        "Password changes are guided here",
+                        "Choose an account from scan results to generate masked password choices.",
+                    )
+                )
+                guidance = Card("No account selected")
+                for line in (
+                    "Open scan results and choose Review account to start account-specific rotation.",
+                    "Generated passwords remain masked in this guided path.",
+                    self.state.vault_status.primary_message,
+                ):
+                    guidance.body.addWidget(self._body_label(line, "listText"))
+                if self.state.vault_status.requires_csv_cleanup:
+                    guidance.body.addWidget(self._body_label(self.state.vault_status.cleanup_message, "listText"))
+                self.rotation_layout.addWidget(guidance)
+                button_row = QHBoxLayout()
+                back = QPushButton("Back to results")
+                back.setObjectName("secondaryButton")
+                back.setCursor(Qt.CursorShape.PointingHandCursor)
+                back.clicked.connect(self._show_results)
+                dashboard = QPushButton("View dashboard")
+                dashboard.setObjectName("primaryButton")
+                dashboard.setCursor(Qt.CursorShape.PointingHandCursor)
+                dashboard.clicked.connect(self._show_dashboard)
+                button_row.addWidget(back)
+                button_row.addStretch(1)
+                button_row.addWidget(dashboard)
+                self.rotation_layout.addLayout(button_row)
+                self.rotation_layout.addStretch(1)
+                return
+
+            self.rotation_layout.addWidget(
                 StepHeader(
-                    "Password changes are guided here",
-                    "Task 5 will connect real scan results before any account-specific rotation begins.",
+                    f"Rotate {account.service_name} password",
+                    "Pick one masked password, change it on the provider reset page, then copy only the selected password.",
+                    "Step 4 of 5",
                 )
             )
-
-            guidance = Card("Protected first-run guidance")
-            for line in (
-                "No urgent accounts are loaded in this placeholder yet.",
-                "When results are available, this step will help you change one password at a time without showing command lines.",
-                "Generated passwords will stay hidden until a later, explicit advanced flow is ready.",
-            ):
-                guidance.body.addWidget(self._body_label(line, "listText"))
-            layout.addWidget(guidance)
-
-            next_steps = Card("For now")
-            next_steps.body.addWidget(
+            choices_card = Card("Masked password choices")
+            choices_card.body.addWidget(
                 self._body_label(
-                    "You can review the dashboard summary next. It will stay focused on scan progress, recovery status, and vault sync without exposing raw passwords."
+                    "Select one option. Plaintext passwords are not displayed in the guided flow.",
+                    "listText",
                 )
             )
-            layout.addWidget(next_steps)
+            choices = QListWidget()
+            choices.setObjectName("choiceList")
+            choices.setMinimumHeight(178)
+            for row in session.choice_summaries:
+                selected = "selected" if row.index == session.selected_index else "available"
+                choices.addItem(
+                    f"Choice {row.index}: {row.display}    length {row.length}    upper {row.has_uppercase}    "
+                    f"digit {row.has_digit}    symbol {row.has_symbol}    {selected}"
+                )
+            if session.selected_index is not None:
+                choices.setCurrentRow(session.selected_index - 1)
+            choices.currentRowChanged.connect(lambda row: self._select_password_choice(row + 1) if row >= 0 else None)
+            choices_card.body.addWidget(choices)
+            self.rotation_layout.addWidget(choices_card)
 
+            vault_card = Card("Vault sync")
+            vault_card.body.addWidget(self._body_label(self.state.vault_status.primary_message, "listText"))
+            if self.state.vault_status.requires_csv_cleanup:
+                vault_card.body.addWidget(self._body_label(self.state.vault_status.cleanup_message, "listText"))
+            self.rotation_layout.addWidget(vault_card)
+
+            actions = Card("Next action")
+            self.rotation_status_label = self._body_label(
+                "Select a masked password choice, complete the reset page, then copy the selected password.",
+                "listText",
+            )
+            actions.body.addWidget(self.rotation_status_label)
             button_row = QHBoxLayout()
+            copy = QPushButton("Copy selected password")
+            copy.setObjectName("primaryButton")
+            copy.setCursor(Qt.CursorShape.PointingHandCursor)
+            copy.clicked.connect(self._copy_selected_rotation_password)
+            button_row.addWidget(copy)
+            if account.reset_link:
+                reset = QPushButton("Open reset link")
+                reset.setObjectName("secondaryButton")
+                reset.setCursor(Qt.CursorShape.PointingHandCursor)
+                reset.clicked.connect(lambda checked=False, link=account.reset_link: webbrowser.open(link))
+                button_row.addWidget(reset)
             back = QPushButton("Back to results")
             back.setObjectName("secondaryButton")
             back.setCursor(Qt.CursorShape.PointingHandCursor)
             back.clicked.connect(self._show_results)
-            dashboard = QPushButton("View dashboard")
-            dashboard.setObjectName("primaryButton")
-            dashboard.setCursor(Qt.CursorShape.PointingHandCursor)
-            dashboard.clicked.connect(self._show_dashboard)
             button_row.addWidget(back)
             button_row.addStretch(1)
-            button_row.addWidget(dashboard)
-            layout.addLayout(button_row)
-            layout.addStretch(1)
-            return page
+            actions.body.addLayout(button_row)
+            self.rotation_layout.addWidget(actions)
+            self.rotation_layout.addStretch(1)
+
+        def _select_password_choice(self, index: int) -> None:
+            session = self.state.rotation_session
+            if session is None:
+                return
+            account = self.state.selected_account or session.account
+            try:
+                self.state = self.state.start_guided_rotation(account, session.select_choice(index))
+            except ValueError:
+                return
+            self._render_rotation_panel()
+
+        def _copy_selected_rotation_password(self) -> None:
+            session = self.state.rotation_session
+            if session is None:
+                if hasattr(self, "rotation_status_label"):
+                    self.rotation_status_label.setText("Choose an account from scan results before copying a password.")
+                return
+            try:
+                selected = session.selected_candidate
+            except ValueError:
+                if hasattr(self, "rotation_status_label"):
+                    self.rotation_status_label.setText("Select one masked password choice before copying.")
+                return
+            copied = copy_text(selected.password, clear_after_seconds=60)
+            if hasattr(self, "rotation_status_label"):
+                self.rotation_status_label.setText(
+                    "Selected password copied. The clipboard clear timer is set for 60 seconds."
+                    if copied
+                    else "Clipboard copy is unavailable."
+                )
 
         def _dashboard_page(self) -> QScrollArea:
             page, layout = self._wizard_page()

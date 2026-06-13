@@ -157,6 +157,20 @@ def test_account_review_transition_records_selected_account():
     assert review.scan_summary == summary
 
 
+def test_rotation_transition_records_account_and_session():
+    summary = ScanSummary.from_findings([], discovered_count=0)
+    account = AccountReview.from_finding_stub("Dropbox", "me@example.com")
+    session = RotationSession(account=account, choices=_password_candidates())
+    state = GuiAppState.new().with_mail_provider(MailProviderChoice.GMAIL).with_scan_summary(summary)
+
+    rotation = state.start_guided_rotation(account, session)
+
+    assert rotation.current_step == GuiStep.ROTATION
+    assert rotation.selected_account == account
+    assert rotation.rotation_session == session
+    assert rotation.scan_summary == summary
+
+
 def test_rotation_session_selects_one_password_without_revealing_all():
     candidates = _password_candidates()
     session = RotationSession(account=AccountReview.from_finding_stub("Dropbox", "me@example.com"), choices=candidates)
@@ -203,3 +217,15 @@ def test_vault_sync_status_guides_nordpass_import_honestly():
 
     assert status.primary_message == "Bitwarden updated. Import the prepared NordPass CSV next."
     assert status.requires_csv_cleanup is True
+
+
+def test_vault_sync_status_cleanup_message_includes_staged_csv_path():
+    status = VaultSyncStatus(
+        bitwarden="updated",
+        nordpass="csv_prepared",
+        verification="pending",
+        csv_path="/tmp/nordpass.csv",
+    )
+
+    assert status.requires_csv_cleanup is True
+    assert "/tmp/nordpass.csv" in status.cleanup_message

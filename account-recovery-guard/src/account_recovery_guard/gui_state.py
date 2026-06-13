@@ -124,6 +124,12 @@ class VaultSyncStatus:
     def requires_csv_cleanup(self) -> bool:
         return self.nordpass in {"csv_prepared", "waiting_for_import", "export_needed"}
 
+    @property
+    def cleanup_message(self) -> str:
+        if not self.csv_path:
+            return "Delete staged NordPass CSV files after import."
+        return f"Delete staged NordPass CSV after import: {self.csv_path}"
+
 
 @dataclass(frozen=True)
 class GuiAppState:
@@ -177,10 +183,15 @@ class GuiAppState:
             raise ValueError("Review scan results before opening an account review")
         return replace(self, current_step=GuiStep.ACCOUNT_REVIEW, selected_account=account)
 
+    def start_guided_rotation(self, account: AccountReview, session: RotationSession) -> "GuiAppState":
+        if self.scan_summary is None:
+            raise ValueError("Review scan results before opening password rotation")
+        return replace(self, current_step=GuiStep.ROTATION, selected_account=account, rotation_session=session)
+
     def show_guided_rotation_placeholder(self) -> "GuiAppState":
         if self.scan_summary is None:
             raise ValueError("Review scan results before opening password guidance")
-        return replace(self, current_step=GuiStep.ROTATION)
+        return replace(self, current_step=GuiStep.ROTATION, selected_account=None, rotation_session=None)
 
     def show_dashboard(self) -> "GuiAppState":
         if self.scan_summary is None:
