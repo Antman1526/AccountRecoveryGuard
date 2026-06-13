@@ -5,6 +5,7 @@ from pathlib import Path
 
 from .clipboard import copy_text
 from .gui_workflow import build_command_preview, recovery_stages, suggested_next_actions
+from .gui_theme import calm_shield_stylesheet
 from .passkeys import passkey_guidance
 from .paths import user_state_dir
 from .rotation import build_rotation_choices, summarize_rotation_choices
@@ -502,40 +503,7 @@ def main() -> int:
             return page
 
     app = QApplication(sys.argv)
-    app.setStyleSheet(
-        """
-        QMainWindow, QWidget { background: #f4f7f8; color: #14252d; font-family: Arial; font-size: 14px; }
-        QFrame#sidebar { background: #10232b; }
-        QLabel#brandTitle { color: #ffffff; font-size: 27px; font-weight: 800; line-height: 1.05; }
-        QLabel#brandSubtitle, QLabel#sidebarNote { color: #b8cbd2; line-height: 1.35; }
-        QLabel#sidebarNote { border-top: 1px solid #29414b; padding-top: 14px; font-size: 12px; }
-        QPushButton#navButton { background: transparent; color: #c6d7dd; border: 0; border-radius: 8px; padding: 12px 14px; text-align: left; font-weight: 650; }
-        QPushButton#navButton:hover { background: #1b3440; color: #ffffff; }
-        QPushButton#navButton:checked { background: #d9f2ef; color: #10232b; }
-        QScrollArea#pageScroll { background: #f4f7f8; }
-        QLabel#pageTitle { font-size: 30px; font-weight: 800; color: #10232b; line-height: 1.15; }
-        QLabel#pageSubtitle { font-size: 15px; color: #526873; line-height: 1.4; max-width: 760px; }
-        QLabel#sectionTitle { font-size: 18px; font-weight: 800; color: #10232b; }
-        QFrame#card, QFrame#panel, QGroupBox#group { background: #ffffff; border: 1px solid #dbe6ea; border-radius: 10px; }
-        QGroupBox#group { margin-top: 14px; padding: 18px 14px 14px 14px; font-weight: 800; }
-        QGroupBox#group::title { subcontrol-origin: margin; left: 14px; padding: 0 5px; color: #10232b; }
-        QLabel#cardTitle { font-size: 16px; font-weight: 800; color: #10232b; }
-        QLabel#cardText, QLabel#listText { color: #526873; line-height: 1.4; }
-        QLabel#badge { background: #e3f6f1; color: #0b594f; border: 1px solid #bde6dc; border-radius: 999px; padding: 4px 10px; font-size: 11px; font-weight: 800; text-transform: uppercase; }
-        QLabel#commandLabel { color: #174e57; background: #eef7f8; border-radius: 6px; padding: 7px 9px; font-family: Menlo; font-size: 12px; }
-        QLabel#warningText { background: #fff7ed; color: #7c2d12; border: 1px solid #fed7aa; border-radius: 8px; padding: 12px; }
-        QLineEdit, QComboBox, QSpinBox { background: #fbfdfe; border: 1px solid #cbd9de; border-radius: 8px; padding: 9px 10px; min-height: 20px; }
-        QLineEdit:focus, QComboBox:focus, QSpinBox:focus { border: 1px solid #1f7a74; background: #ffffff; }
-        QTextEdit#commandBox, QTextEdit#resultBox, QListWidget#choiceList { background: #fbfdfe; border: 1px solid #cbd9de; border-radius: 8px; padding: 10px; }
-        QTextEdit#commandBox { color: #16333c; }
-        QPushButton#primaryButton, QPushButton#secondaryButton { border-radius: 8px; padding: 10px 14px; font-weight: 800; min-height: 22px; }
-        QPushButton#primaryButton { background: #145c58; color: #ffffff; border: 1px solid #145c58; }
-        QPushButton#primaryButton:hover { background: #0f4d49; }
-        QPushButton#secondaryButton { background: #ffffff; color: #145c58; border: 1px solid #a9c9c5; }
-        QPushButton#secondaryButton:hover { background: #eef7f6; }
-        QCheckBox { color: #344f59; spacing: 9px; }
-        """
-    )
+    app.setStyleSheet(calm_shield_stylesheet())
     window = MainWindow()
     window.show()
     return app.exec()
