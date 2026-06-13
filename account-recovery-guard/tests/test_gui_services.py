@@ -6,6 +6,7 @@ from account_recovery_guard.gui_services import (
     GuiVaultService,
     GuiVaultWriteResult,
     describe_provider_setup,
+    scan_progress_stages,
 )
 from account_recovery_guard.gui_state import MailProviderChoice
 from account_recovery_guard.models import DiscoveredAccount, PasswordCandidate
@@ -51,6 +52,19 @@ def test_describe_provider_setup_marks_other_email_advanced():
     assert setup.title == "Other email"
     assert setup.advanced is True
     assert "IMAP" in setup.technical_details
+
+
+def test_scan_progress_stages_are_plain_language():
+    stages = scan_progress_stages()
+
+    assert stages == [
+        "Connecting to mailbox",
+        "Reading recent account and security messages",
+        "Finding websites tied to this email",
+        "Looking for risk signals",
+        "Preparing recommendations",
+    ]
+    assert all("IMAP" not in stage and "OAuth" not in stage for stage in stages)
 
 
 def test_scan_service_returns_guided_summary_from_provider_messages():

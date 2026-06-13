@@ -75,6 +75,16 @@ class GuiScanService:
         return ScanSummary.from_findings(findings, discovered_count=discovered_count)
 
 
+def scan_progress_stages() -> list[str]:
+    return [
+        "Connecting to mailbox",
+        "Reading recent account and security messages",
+        "Finding websites tied to this email",
+        "Looking for risk signals",
+        "Preparing recommendations",
+    ]
+
+
 class GuiRotationService:
     def start(self, service_name: str, username: str, url: str | None = None) -> RotationSession:
         account = AccountReview.from_finding_stub(service_name, username)

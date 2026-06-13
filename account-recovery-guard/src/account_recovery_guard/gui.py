@@ -43,8 +43,8 @@ def main() -> int:
         return 2
 
     from .gui_components import Card, ProviderButton, StepHeader, StatusPill
-    from .gui_services import describe_provider_setup
-    from .gui_state import GuiAppState, MailProviderChoice
+    from .gui_services import describe_provider_setup, scan_progress_stages
+    from .gui_state import AccountReview, GuiAppState, MailProviderChoice, ScanSummary
 
     class MainWindow(QMainWindow):
         def __init__(self) -> None:
@@ -162,66 +162,121 @@ def main() -> int:
         def _start_scan_from_consent(self) -> None:
             self.state = self.state.start_scan()
             self.stack.setCurrentIndex(2)
+            for stage in scan_progress_stages():
+                self.scan_stage_label.setText(stage)
+            self._continue_to_placeholder_results()
 
         def _scan_progress_page(self) -> QScrollArea:
             page, layout = self._wizard_page()
             layout.addWidget(
                 StepHeader(
-                    "Scanning your mailbox",
-                    "Account Recovery Guard is preparing a local scan of account and security messages.",
+                    "Looking for account and security emails",
+                    "This can take a few minutes.",
                     "Step 3 of 3",
                 )
             )
             status_card = Card("Scan status")
-            status_card.body.addWidget(StatusPill("Ready for background scan", "safe"))
-            status_card.body.addWidget(
-                self._body_label(
-                    "The next build step will connect the background scanner. For now, this guided flow confirms your provider and consent before any scan can start."
-                )
-            )
+            status_card.body.addWidget(StatusPill("Local scan", "safe"))
+            self.scan_stage_label = self._body_label("Ready to scan", "listText")
+            status_card.body.addWidget(self.scan_stage_label)
             layout.addWidget(status_card)
-            next_button = QPushButton("Continue to results")
-            next_button.setObjectName("primaryButton")
-            next_button.setCursor(Qt.CursorShape.PointingHandCursor)
-            next_button.clicked.connect(self._continue_to_placeholder_results)
-            layout.addWidget(next_button, alignment=Qt.AlignmentFlag.AlignRight)
             layout.addStretch(1)
             return page
 
         def _continue_to_placeholder_results(self) -> None:
             self.state = self.state.complete_placeholder_scan()
+            self._render_results()
             self.stack.setCurrentIndex(3)
 
         def _results_page(self) -> QScrollArea:
             page, layout = self._wizard_page()
-            layout.addWidget(
-                StepHeader(
-                    "Review accounts needing attention",
-                    "Results will appear here after the scanner finishes.",
-                )
-            )
-            empty = Card("No results yet")
-            empty.body.addWidget(
-                self._body_label(
-                    "Task 5 will add live scanning and account findings. This screen is reserved for a clear, prioritized review before you rotate any passwords."
-                )
-            )
-            layout.addWidget(empty)
+            self.results_layout = layout
+            self._render_empty_results()
+            return page
+
+        def _render_results(self) -> None:
+            summary = self.state.scan_summary
+            if summary is None:
+                self._render_empty_results()
+                return
+            self._clear_layout(self.results_layout)
+            self.results_layout.addWidget(StepHeader(summary.headline, summary.attention_text, "Step 3 of 3"))
+            if summary.recommended is None:
+                self._render_empty_results(summary)
+                return
+
+            account = AccountReview.from_finding(summary.recommended, "you@example.com")
+            card = Card(f"Start with {account.service_name}")
+            card.body.addWidget(StatusPill(account.risk_label, "attention" if account.risk_label == "Needs attention" else "safe"))
+            reason_text = " ".join(account.reasons) if account.reasons else "This account has signals worth reviewing first."
+            card.body.addWidget(self._body_label(reason_text))
             button_row = QHBoxLayout()
-            rotate = QPushButton("Review password guidance")
-            rotate.setObjectName("secondaryButton")
-            rotate.setCursor(Qt.CursorShape.PointingHandCursor)
-            rotate.clicked.connect(self._show_guided_rotation_placeholder)
+            review = QPushButton("Review account")
+            review.setObjectName("primaryButton")
+            review.setCursor(Qt.CursorShape.PointingHandCursor)
+            review.clicked.connect(lambda checked=False, selected=account: self._show_account_review_placeholder(selected))
+            all_accounts = QPushButton("View all accounts")
+            all_accounts.setObjectName("secondaryButton")
+            all_accounts.setCursor(Qt.CursorShape.PointingHandCursor)
+            button_row.addWidget(review)
+            button_row.addWidget(all_accounts)
+            button_row.addStretch(1)
+            card.body.addLayout(button_row)
+            self.results_layout.addWidget(card)
+
             dashboard = QPushButton("View dashboard")
-            dashboard.setObjectName("primaryButton")
+            dashboard.setObjectName("secondaryButton")
             dashboard.setCursor(Qt.CursorShape.PointingHandCursor)
             dashboard.clicked.connect(self._show_dashboard)
-            button_row.addWidget(rotate)
-            button_row.addStretch(1)
-            button_row.addWidget(dashboard)
-            layout.addLayout(button_row)
-            layout.addStretch(1)
-            return page
+            self.results_layout.addWidget(dashboard, alignment=Qt.AlignmentFlag.AlignRight)
+            self.results_layout.addStretch(1)
+
+        def _render_empty_results(self, summary: ScanSummary | None = None) -> None:
+            if hasattr(self, "results_layout"):
+                self._clear_layout(self.results_layout)
+                title = summary.headline if summary else "Review accounts needing attention"
+                subtitle = summary.attention_text if summary else "Results will appear here after the scanner finishes."
+                self.results_layout.addWidget(StepHeader(title, subtitle, "Step 3 of 3"))
+                empty = Card("No accounts need attention" if summary else "No results yet")
+                empty.body.addWidget(
+                    self._body_label(
+                        "No urgent account alerts were found. You can still review the dashboard summary and return here when another scan has results."
+                        if summary
+                        else "Scan results will appear here before any account-specific password guidance starts."
+                    )
+                )
+                self.results_layout.addWidget(empty)
+                if summary is None:
+                    self.results_layout.addStretch(1)
+                    return
+                button_row = QHBoxLayout()
+                rotate = QPushButton("Review password guidance")
+                rotate.setObjectName("secondaryButton")
+                rotate.setCursor(Qt.CursorShape.PointingHandCursor)
+                rotate.clicked.connect(self._show_guided_rotation_placeholder)
+                dashboard = QPushButton("View dashboard")
+                dashboard.setObjectName("primaryButton")
+                dashboard.setCursor(Qt.CursorShape.PointingHandCursor)
+                dashboard.clicked.connect(self._show_dashboard)
+                button_row.addWidget(rotate)
+                button_row.addStretch(1)
+                button_row.addWidget(dashboard)
+                self.results_layout.addLayout(button_row)
+                self.results_layout.addStretch(1)
+
+        def _clear_layout(self, layout) -> None:
+            while layout.count():
+                item = layout.takeAt(0)
+                widget = item.widget()
+                child_layout = item.layout()
+                if widget is not None:
+                    widget.deleteLater()
+                elif child_layout is not None:
+                    self._clear_layout(child_layout)
+
+        def _show_account_review_placeholder(self, account: AccountReview) -> None:
+            self.selected_account = account
+            self._show_guided_rotation_placeholder()
 
         def _show_guided_rotation_placeholder(self) -> None:
             self.state = self.state.show_guided_rotation_placeholder()
