@@ -328,7 +328,7 @@ Build a Windows `.exe` on Windows:
 .\scripts\build_windows_exe.ps1
 ```
 
-The GitHub Actions workflow at `.github/workflows/build-release.yml` builds both artifacts on native runners and uploads them as workflow artifacts.
+The GitHub Actions workflow at `.github/workflows/build-account-recovery-guard.yml` builds both artifacts on native runners and uploads them as workflow artifacts. The macOS DMG includes an `Applications` shortcut plus this README; the Windows artifact includes `README-Windows.txt` with install-warning context.
 
 Signing hooks:
 
@@ -361,7 +361,7 @@ account-recovery-guard/
   requirements-build.txt            Build dependencies for packaged artifacts.
   pyproject.toml                    Package metadata and CLI entry points.
   .gitignore                        Ignores venvs, caches, build output, CSVs, and logs.
-  .github/workflows/build-release.yml GitHub Actions workflow for tests, macOS DMG, and Windows EXE.
+  .github/workflows/build-account-recovery-guard.yml GitHub Actions workflow for tests, macOS DMG, and Windows EXE.
   packaging/account_recovery_guard_entry.py PyInstaller entrypoint.
   packaging/macos-entitlements.plist macOS hardened-runtime entitlements template.
   scripts/checksums.py               Generates SHA256 checksum files for release artifacts.

@@ -64,3 +64,4 @@ jobs:
           path: |
             account-recovery-guard/dist/AccountRecoveryGuard.exe
             account-recovery-guard/dist/AccountRecoveryGuard.exe.sha256
+            account-recovery-guard/dist/README-Windows.txt

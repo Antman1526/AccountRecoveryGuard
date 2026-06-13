@@ -27,5 +27,10 @@ if ($env:WINDOWS_SIGNTOOL_PATH -and $env:WINDOWS_CERT_SHA1) {
 }
 
 & $PythonExe scripts\checksums.py dist\AccountRecoveryGuard.exe | Out-File -Encoding ascii dist\AccountRecoveryGuard.exe.sha256
+@"
+Account Recovery Guard for Windows
+
+This build opens the guided desktop app. Windows may ask you to confirm the app until it is signed with an Authenticode certificate.
+"@ | Set-Content -Encoding ascii dist\README-Windows.txt
 
 Write-Host "Created dist\AccountRecoveryGuard.exe"

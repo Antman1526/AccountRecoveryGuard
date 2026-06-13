@@ -38,6 +38,13 @@ else
   cp "dist/AccountRecoveryGuard" "$DMG_ROOT/AccountRecoveryGuard"
 fi
 cp README.md "$DMG_ROOT/README.md"
+if [[ -L "$DMG_ROOT/Applications" ]]; then
+  rm "$DMG_ROOT/Applications"
+elif [[ -e "$DMG_ROOT/Applications" ]]; then
+  echo "$DMG_ROOT/Applications already exists and is not a symlink" >&2
+  exit 1
+fi
+ln -s /Applications "$DMG_ROOT/Applications"
 
 hdiutil create \
   -volname "AccountRecoveryGuard" \
