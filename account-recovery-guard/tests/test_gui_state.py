@@ -77,6 +77,74 @@ def test_scan_summary_recommends_highest_risk_finding():
     assert summary.headline == "Your scan found 12 accounts"
 
 
+def test_placeholder_scan_completion_enables_results_and_dashboard():
+    state = GuiAppState.new().with_mail_provider(MailProviderChoice.GMAIL).start_scan()
+
+    completed = state.complete_placeholder_scan()
+
+    assert completed.current_step == GuiStep.RESULTS
+    assert completed.scan_started is True
+    assert completed.scan_summary == ScanSummary.from_findings([], discovered_count=0)
+    assert completed.dashboard_available is True
+
+
+def test_dashboard_requires_scan_summary():
+    state = GuiAppState.new().with_mail_provider(MailProviderChoice.GMAIL)
+
+    try:
+        state.show_dashboard()
+    except ValueError as exc:
+        assert "scan summary" in str(exc)
+    else:
+        raise AssertionError("show_dashboard should require scan results")
+
+
+def test_results_transition_requires_scan_summary():
+    state = GuiAppState.new().with_mail_provider(MailProviderChoice.GMAIL)
+
+    try:
+        state.show_results()
+    except ValueError as exc:
+        assert "scan summary" in str(exc)
+    else:
+        raise AssertionError("show_results should require scan results")
+
+
+def test_rotation_placeholder_requires_scan_summary():
+    state = GuiAppState.new().with_mail_provider(MailProviderChoice.GMAIL)
+
+    try:
+        state.show_guided_rotation_placeholder()
+    except ValueError as exc:
+        assert "scan results" in str(exc)
+    else:
+        raise AssertionError("show_guided_rotation_placeholder should require scan results")
+
+
+def test_dashboard_transition_keeps_summary_available():
+    summary = ScanSummary.from_findings([], discovered_count=0)
+    state = GuiAppState.new().with_mail_provider(MailProviderChoice.GMAIL).with_scan_summary(summary)
+
+    dashboard = state.show_dashboard()
+
+    assert dashboard.current_step == GuiStep.DASHBOARD
+    assert dashboard.scan_summary == summary
+    assert dashboard.dashboard_available is True
+
+
+def test_results_and_rotation_transitions_keep_summary_available():
+    summary = ScanSummary.from_findings([], discovered_count=0)
+    state = GuiAppState.new().with_mail_provider(MailProviderChoice.GMAIL).with_scan_summary(summary)
+
+    results = state.show_guided_rotation_placeholder().show_results()
+    rotation = state.show_guided_rotation_placeholder()
+
+    assert results.current_step == GuiStep.RESULTS
+    assert rotation.current_step == GuiStep.ROTATION
+    assert results.scan_summary == summary
+    assert rotation.scan_summary == summary
+
+
 def test_rotation_session_selects_one_password_without_revealing_all():
     candidates = _password_candidates()
     session = RotationSession(account=AccountReview.from_finding_stub("Dropbox", "me@example.com"), choices=candidates)

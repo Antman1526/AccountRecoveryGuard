@@ -164,6 +164,24 @@ class GuiAppState:
     def with_scan_summary(self, summary: ScanSummary) -> "GuiAppState":
         return replace(self, current_step=GuiStep.RESULTS, scan_summary=summary)
 
+    def complete_placeholder_scan(self) -> "GuiAppState":
+        return self.with_scan_summary(ScanSummary.from_findings([], discovered_count=0))
+
+    def show_results(self) -> "GuiAppState":
+        if self.scan_summary is None:
+            raise ValueError("A scan summary is required before returning to results")
+        return replace(self, current_step=GuiStep.RESULTS)
+
+    def show_guided_rotation_placeholder(self) -> "GuiAppState":
+        if self.scan_summary is None:
+            raise ValueError("Review scan results before opening password guidance")
+        return replace(self, current_step=GuiStep.ROTATION)
+
+    def show_dashboard(self) -> "GuiAppState":
+        if self.scan_summary is None:
+            raise ValueError("A scan summary is required before opening the dashboard")
+        return replace(self, current_step=GuiStep.DASHBOARD)
+
 
 def _risk_label(severity: str) -> str:
     if severity in {"critical", "high"}:

@@ -69,7 +69,7 @@ def main() -> int:
             self.stack.addWidget(self._scan_consent_page())
             self.stack.addWidget(self._scan_progress_page())
             self.stack.addWidget(self._results_page())
-            self.stack.addWidget(self._rotation_page())
+            self.stack.addWidget(self._guided_rotation_placeholder_page())
             self.stack.addWidget(self._dashboard_page())
             self.stack.setCurrentIndex(0)
 
@@ -183,10 +183,14 @@ def main() -> int:
             next_button = QPushButton("Continue to results")
             next_button.setObjectName("primaryButton")
             next_button.setCursor(Qt.CursorShape.PointingHandCursor)
-            next_button.clicked.connect(lambda: self.stack.setCurrentIndex(3))
+            next_button.clicked.connect(self._continue_to_placeholder_results)
             layout.addWidget(next_button, alignment=Qt.AlignmentFlag.AlignRight)
             layout.addStretch(1)
             return page
+
+        def _continue_to_placeholder_results(self) -> None:
+            self.state = self.state.complete_placeholder_scan()
+            self.stack.setCurrentIndex(3)
 
         def _results_page(self) -> QScrollArea:
             page, layout = self._wizard_page()
@@ -204,15 +208,69 @@ def main() -> int:
             )
             layout.addWidget(empty)
             button_row = QHBoxLayout()
-            rotate = QPushButton("Open rotation helper")
+            rotate = QPushButton("Review password guidance")
             rotate.setObjectName("secondaryButton")
             rotate.setCursor(Qt.CursorShape.PointingHandCursor)
-            rotate.clicked.connect(lambda: self.stack.setCurrentIndex(4))
+            rotate.clicked.connect(self._show_guided_rotation_placeholder)
             dashboard = QPushButton("View dashboard")
             dashboard.setObjectName("primaryButton")
             dashboard.setCursor(Qt.CursorShape.PointingHandCursor)
-            dashboard.clicked.connect(lambda: self.stack.setCurrentIndex(5))
+            dashboard.clicked.connect(self._show_dashboard)
             button_row.addWidget(rotate)
+            button_row.addStretch(1)
+            button_row.addWidget(dashboard)
+            layout.addLayout(button_row)
+            layout.addStretch(1)
+            return page
+
+        def _show_guided_rotation_placeholder(self) -> None:
+            self.state = self.state.show_guided_rotation_placeholder()
+            self.stack.setCurrentIndex(4)
+
+        def _show_results(self) -> None:
+            self.state = self.state.show_results()
+            self.stack.setCurrentIndex(3)
+
+        def _show_dashboard(self) -> None:
+            self.state = self.state.show_dashboard()
+            self.stack.setCurrentIndex(5)
+
+        def _guided_rotation_placeholder_page(self) -> QScrollArea:
+            page, layout = self._wizard_page()
+            layout.addWidget(
+                StepHeader(
+                    "Password changes are guided here",
+                    "Task 5 will connect real scan results before any account-specific rotation begins.",
+                )
+            )
+
+            guidance = Card("Protected first-run guidance")
+            for line in (
+                "No urgent accounts are loaded in this placeholder yet.",
+                "When results are available, this step will help you change one password at a time without showing command lines.",
+                "Generated passwords will stay hidden until a later, explicit advanced flow is ready.",
+            ):
+                guidance.body.addWidget(self._body_label(line, "listText"))
+            layout.addWidget(guidance)
+
+            next_steps = Card("For now")
+            next_steps.body.addWidget(
+                self._body_label(
+                    "You can review the dashboard summary next. It will stay focused on scan progress, recovery status, and vault sync without exposing raw passwords."
+                )
+            )
+            layout.addWidget(next_steps)
+
+            button_row = QHBoxLayout()
+            back = QPushButton("Back to results")
+            back.setObjectName("secondaryButton")
+            back.setCursor(Qt.CursorShape.PointingHandCursor)
+            back.clicked.connect(self._show_results)
+            dashboard = QPushButton("View dashboard")
+            dashboard.setObjectName("primaryButton")
+            dashboard.setCursor(Qt.CursorShape.PointingHandCursor)
+            dashboard.clicked.connect(self._show_dashboard)
+            button_row.addWidget(back)
             button_row.addStretch(1)
             button_row.addWidget(dashboard)
             layout.addLayout(button_row)
@@ -449,7 +507,7 @@ def main() -> int:
             update_preview()
             return page
 
-        def _rotation_page(self) -> QScrollArea:
+        def _advanced_rotation_page_unreachable_from_first_run(self) -> QScrollArea:
             page = self._scroll_page(
                 "Rotate one risky account at a time",
                 "Generate five strong passwords, select one, open the reset flow if available, then copy only the chosen password.",
