@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import re
 from dataclasses import dataclass
 from email.message import Message
 from typing import Protocol
@@ -22,6 +23,13 @@ class ProviderSetupCopy:
     title: str
     description: str
     advanced: bool
+    technical_details: str = ""
+
+
+@dataclass(frozen=True)
+class GuiVaultWriteResult:
+    status: VaultSyncStatus
+    user_message: str
     technical_details: str = ""
 
 
@@ -61,7 +69,9 @@ class GuiScanService:
         messages = self.provider.fetch_messages(days_back=days_back)
         findings = [finding for message in messages if (finding := self.classifier.classify(message))]
         accounts = self.discovery.discover(messages)
-        discovered_count = max(len(accounts), len(findings))
+        discovered_services = {account.service_name.casefold() for account in accounts if account.service_name}
+        risky_services = {finding.service_name.casefold() for finding in findings if finding.service_name}
+        discovered_count = len(discovered_services | risky_services)
         return ScanSummary.from_findings(findings, discovered_count=discovered_count)
 
 
@@ -85,11 +95,43 @@ class GuiVaultService:
             return VaultSyncStatus(bitwarden="not_configured", nordpass="import_needed", verification="pending")
         return VaultSyncStatus(bitwarden="connected", nordpass="import_needed", verification="pending")
 
-    def write_bitwarden(self, candidate: PasswordCandidate) -> VaultSyncStatus:
+    def write_bitwarden(self, candidate: PasswordCandidate) -> GuiVaultWriteResult:
         if self.bitwarden is None:
-            return VaultSyncStatus(bitwarden="not_configured", nordpass="import_needed", verification="pending")
+            return GuiVaultWriteResult(
+                status=VaultSyncStatus(bitwarden="not_configured", nordpass="import_needed", verification="pending"),
+                user_message="Bitwarden is not configured yet. Connect Bitwarden before writing this login.",
+            )
         try:
             self.bitwarden.upsert_login(candidate)
-        except VaultError:
-            return VaultSyncStatus(bitwarden="verification_failed", nordpass="import_needed", verification="pending")
-        return VaultSyncStatus(bitwarden="updated", nordpass="import_needed", verification="pending")
+        except VaultError as exc:
+            details = _sanitize_vault_message(str(exc))
+            guidance = _user_vault_guidance(details)
+            return GuiVaultWriteResult(
+                status=VaultSyncStatus(bitwarden="verification_failed", nordpass="import_needed", verification="pending"),
+                user_message=f"Bitwarden update could not be verified: {guidance}",
+                technical_details=details,
+            )
+        return GuiVaultWriteResult(
+            status=VaultSyncStatus(bitwarden="updated", nordpass="import_needed", verification="pending"),
+            user_message="Bitwarden was updated. NordPass import is still needed.",
+        )
+
+
+_SECRET_PATTERNS = (
+    re.compile(r"(?i)\b(token|secret|password|session|api[_-]?key|access[_-]?token|refresh[_-]?token)=\S+"),
+    re.compile(r"(?i)\b(bw_session)=\S+"),
+)
+
+
+def _sanitize_vault_message(message: str) -> str:
+    sanitized = message.strip()
+    for pattern in _SECRET_PATTERNS:
+        sanitized = pattern.sub(lambda match: f"{match.group(1)}=<redacted>", sanitized)
+    return sanitized
+
+
+def _user_vault_guidance(details: str) -> str:
+    first_sentence = details.split(".", 1)[0].strip()
+    if first_sentence:
+        return first_sentence + "."
+    return "Check your Bitwarden CLI session and try again."
