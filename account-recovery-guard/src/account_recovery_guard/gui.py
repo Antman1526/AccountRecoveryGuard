@@ -14,7 +14,7 @@ from .secure_files import plaintext_file_warning
 
 def main() -> int:
     try:
-        from PySide6.QtCore import Qt, QTimer
+        from PySide6.QtCore import Qt, QThread, QTimer
         from PySide6.QtGui import QFont
         from PySide6.QtWidgets import (
             QApplication,
@@ -43,8 +43,15 @@ def main() -> int:
         return 2
 
     from .gui_components import Card, ProviderButton, StepHeader, StatusPill
-    from .gui_services import describe_provider_setup, scan_progress_stages
+    from .gui_services import (
+        GuiScanService,
+        MailProviderSettings,
+        build_provider_or_error,
+        describe_provider_setup,
+        scan_progress_stages,
+    )
     from .gui_state import AccountReview, GuiAppState, MailProviderChoice, ScanSummary
+    from .gui_workers import ScanWorker
 
     class MainWindow(QMainWindow):
         def __init__(self) -> None:
@@ -143,6 +150,50 @@ def main() -> int:
             consent.body.addWidget(self._body_label(self.state.consent_summary))
             layout.addWidget(consent)
 
+            setup = Card("Provider setup")
+            self.setup_error_label = self._body_label("", "listText")
+            self.setup_error_label.setVisible(False)
+            setup.body.addWidget(self.setup_error_label)
+
+            form = QGridLayout()
+            form.setHorizontalSpacing(14)
+            form.setVerticalSpacing(10)
+            self.setup_username = QLineEdit("")
+            self.setup_username.setPlaceholderText("you@example.com")
+            self.setup_days_back = QSpinBox()
+            self.setup_days_back.setRange(1, 3650)
+            self.setup_days_back.setValue(30)
+            self.setup_gmail_client_secret_file = QLineEdit("")
+            self.setup_gmail_client_secret_file.setPlaceholderText("Path to Gmail setup JSON")
+            self.setup_graph_tenant_id = QLineEdit("common")
+            self.setup_graph_client_id = QLineEdit("")
+            self.setup_graph_client_id.setPlaceholderText("Outlook application client ID")
+            self.setup_imap_host = QLineEdit("")
+            self.setup_imap_host.setPlaceholderText("imap.example.com")
+            self.setup_imap_secret_name = QLineEdit("")
+            self.setup_imap_secret_name.setPlaceholderText("Saved password secret name")
+
+            fields = (
+                ("Mailbox username", self.setup_username),
+                ("Days to scan", self.setup_days_back),
+                ("Gmail setup file", self.setup_gmail_client_secret_file),
+                ("Outlook tenant", self.setup_graph_tenant_id),
+                ("Outlook client ID", self.setup_graph_client_id),
+                ("IMAP host", self.setup_imap_host),
+                ("Saved IMAP secret name", self.setup_imap_secret_name),
+            )
+            for row, (label, widget) in enumerate(fields):
+                form.addWidget(QLabel(label), row, 0)
+                form.addWidget(widget, row, 1)
+            setup.body.addLayout(form)
+            setup.body.addWidget(
+                self._body_label(
+                    "Use a saved secret name for other email. Do not paste an IMAP password into this screen.",
+                    "listText",
+                )
+            )
+            layout.addWidget(setup)
+
             button_row = QHBoxLayout()
             back = QPushButton("Back")
             back.setObjectName("secondaryButton")
@@ -160,11 +211,75 @@ def main() -> int:
             return page
 
         def _start_scan_from_consent(self) -> None:
+            if hasattr(self, "setup_error_label"):
+                self.setup_error_label.setVisible(False)
+            if self.state.mail_provider is None:
+                self._show_user_error("Choose a mail provider before starting the scan.", "missing provider")
+                return
+            settings = MailProviderSettings(
+                provider=self.state.mail_provider,
+                username=self.setup_username.text(),
+                days_back=self.setup_days_back.value(),
+                gmail_client_secret_file=self.setup_gmail_client_secret_file.text(),
+                graph_tenant_id=self.setup_graph_tenant_id.text(),
+                graph_client_id=self.setup_graph_client_id.text(),
+                imap_host=self.setup_imap_host.text(),
+                imap_secret_name=self.setup_imap_secret_name.text(),
+            )
+            provider, error = build_provider_or_error(settings)
+            if error is not None:
+                self._show_user_error(error.user_message, error.technical_details)
+                return
+            if provider is None:
+                self._show_user_error("The mail provider could not be prepared. Check setup and try again.", "missing provider instance")
+                return
             self.state = self.state.start_scan()
             self.stack.setCurrentIndex(2)
-            self._placeholder_scan_stages = scan_progress_stages()
-            self._placeholder_scan_stage_index = 0
-            self._advance_placeholder_scan_stage()
+            self.scan_stage_label.setText(scan_progress_stages()[0])
+            self._scan_thread = QThread(self)
+            self._scan_worker = ScanWorker(GuiScanService(provider), days_back=settings.days_back)
+            self._scan_worker.moveToThread(self._scan_thread)
+            self._scan_thread.started.connect(self._scan_worker.run)
+            self._scan_worker.progress.connect(self.scan_stage_label.setText)
+            self._scan_worker.finished.connect(self._finish_real_scan)
+            self._scan_worker.failed.connect(self._handle_scan_failure)
+            self._scan_worker.finished.connect(self._scan_thread.quit)
+            self._scan_worker.failed.connect(self._scan_thread.quit)
+            self._scan_thread.finished.connect(self._scan_worker.deleteLater)
+            self._scan_thread.finished.connect(self._scan_thread.deleteLater)
+            self._scan_thread.start()
+
+        def _show_user_error(self, message: str, technical_details: str) -> None:
+            if hasattr(self, "setup_error_label"):
+                self.setup_error_label.setText(message)
+                self.setup_error_label.setVisible(True)
+            controlled_details = self._controlled_setup_details(technical_details)
+            if controlled_details:
+                print(f"Setup check: {controlled_details}", file=sys.stderr)
+
+        def _controlled_setup_details(self, technical_details: str) -> str:
+            allowed_tokens = {
+                "client_secret_file",
+                "client_id",
+                "imap_host",
+                "username",
+                "imap_secret_name",
+                "provider",
+                "provider instance",
+                "saved secret value",
+            }
+            if any(token in technical_details for token in allowed_tokens):
+                return technical_details
+            return ""
+
+        def _finish_real_scan(self, summary: ScanSummary) -> None:
+            self.state = self.state.with_scan_summary(summary)
+            self._render_results()
+            self.stack.setCurrentIndex(3)
+
+        def _handle_scan_failure(self, message: str) -> None:
+            self.stack.setCurrentIndex(1)
+            self._show_user_error(message, "scan failed")
 
         def _advance_placeholder_scan_stage(self) -> None:
             if self._placeholder_scan_stage_index >= len(self._placeholder_scan_stages):

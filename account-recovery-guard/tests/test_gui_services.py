@@ -5,7 +5,9 @@ from account_recovery_guard.gui_services import (
     GuiScanService,
     GuiVaultService,
     GuiVaultWriteResult,
+    MailProviderSettings,
     SAFE_SCAN_FAILURE_MESSAGE,
+    build_provider_or_error,
     describe_provider_setup,
     scan_progress_stages,
 )
@@ -66,6 +68,24 @@ def test_scan_progress_stages_are_plain_language():
         "Preparing recommendations",
     ]
     assert all("IMAP" not in stage and "OAuth" not in stage for stage in stages)
+
+
+def test_gmail_provider_factory_explains_missing_client_secret():
+    provider, error = build_provider_or_error(MailProviderSettings(provider=MailProviderChoice.GMAIL))
+
+    assert provider is None
+    assert error is not None
+    assert "Gmail setup file" in error.user_message
+    assert "client_secret_file" in error.technical_details
+
+
+def test_outlook_provider_factory_explains_missing_client_id():
+    provider, error = build_provider_or_error(MailProviderSettings(provider=MailProviderChoice.OUTLOOK))
+
+    assert provider is None
+    assert error is not None
+    assert "Outlook setup" in error.user_message
+    assert "client_id" in error.technical_details
 
 
 def test_scan_service_returns_guided_summary_from_provider_messages():

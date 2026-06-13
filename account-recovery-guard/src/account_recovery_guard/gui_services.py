@@ -3,6 +3,8 @@ from __future__ import annotations
 import re
 from dataclasses import dataclass
 from email.message import Message
+from inspect import signature
+from pathlib import Path
 from typing import Protocol
 
 from .account_discovery import AccountDiscovery
@@ -27,6 +29,24 @@ class ProviderSetupCopy:
     description: str
     advanced: bool
     technical_details: str = ""
+
+
+@dataclass(frozen=True)
+class UserFacingSetupError:
+    user_message: str
+    technical_details: str
+
+
+@dataclass(frozen=True)
+class MailProviderSettings:
+    provider: MailProviderChoice
+    username: str = ""
+    days_back: int = 30
+    gmail_client_secret_file: str = ""
+    graph_tenant_id: str = "common"
+    graph_client_id: str = ""
+    imap_host: str = ""
+    imap_secret_name: str = ""
 
 
 @dataclass(frozen=True)
@@ -57,6 +77,71 @@ def describe_provider_setup(provider: MailProviderChoice) -> ProviderSetupCopy:
     )
 
 
+def build_provider_or_error(settings: MailProviderSettings) -> tuple[MailProvider | None, UserFacingSetupError | None]:
+    if settings.provider == MailProviderChoice.GMAIL:
+        client_secret_file = settings.gmail_client_secret_file.strip()
+        client_secret_path = Path(client_secret_file).expanduser()
+        if not client_secret_file or not client_secret_path.exists():
+            return None, UserFacingSetupError(
+                user_message="Choose a Gmail setup file before starting the scan.",
+                technical_details="missing client_secret_file",
+            )
+        from .oauth_mail import GmailApiMailProvider, GmailOAuthConfig
+
+        return GmailApiMailProvider(GmailOAuthConfig(str(client_secret_path))), None
+
+    if settings.provider == MailProviderChoice.OUTLOOK:
+        client_id = settings.graph_client_id.strip()
+        if not client_id:
+            return None, UserFacingSetupError(
+                user_message="Complete Outlook setup before starting the scan.",
+                technical_details="missing client_id",
+            )
+        from .oauth_mail import GraphOAuthConfig, MicrosoftGraphMailProvider
+
+        tenant_id = settings.graph_tenant_id.strip() or "common"
+        return MicrosoftGraphMailProvider(GraphOAuthConfig(tenant_id, client_id)), None
+
+    imap_host = settings.imap_host.strip()
+    username = settings.username.strip()
+    secret_name = settings.imap_secret_name.strip()
+    missing = []
+    if not imap_host:
+        missing.append("imap_host")
+    if not username:
+        missing.append("username")
+    if not secret_name:
+        missing.append("imap_secret_name")
+    if missing:
+        return None, UserFacingSetupError(
+            user_message="Complete the other email setup before starting the scan.",
+            technical_details=f"missing {', '.join(missing)}",
+        )
+
+    from .secure_store import get_secret
+
+    password = get_secret(secret_name)
+    if not password:
+        return None, UserFacingSetupError(
+            user_message="The saved mail password was not found. Check the saved secret name and try again.",
+            technical_details="missing saved secret value for imap_secret_name",
+        )
+
+    from .email_scanner import ImapEmailScanner, ImapMailboxConfig
+
+    return (
+        ImapEmailScanner(
+            ImapMailboxConfig(
+                host=imap_host,
+                username=username,
+                password=password,
+                days_back=max(settings.days_back, 1),
+            )
+        ),
+        None,
+    )
+
+
 class GuiScanService:
     def __init__(
         self,
@@ -69,7 +154,11 @@ class GuiScanService:
         self.discovery = discovery or AccountDiscovery()
 
     def scan(self, days_back: int = 30) -> ScanSummary:
-        messages = self.provider.fetch_messages(days_back=days_back)
+        fetch_messages = self.provider.fetch_messages
+        if "days_back" in signature(fetch_messages).parameters:
+            messages = fetch_messages(days_back=days_back)
+        else:
+            messages = fetch_messages()
         findings = [finding for message in messages if (finding := self.classifier.classify(message))]
         accounts = self.discovery.discover(messages)
         discovered_services = {account.service_name.casefold() for account in accounts if account.service_name}
