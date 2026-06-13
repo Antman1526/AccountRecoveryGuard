@@ -99,7 +99,7 @@ Secrets:
 
 - IMAP app passwords and generated replacement passwords are stored with Python `keyring`, which uses macOS Keychain and Windows Credential Locker on those platforms.
 - `BW_SESSION` is read from the process environment only.
-- OAuth tokens are not implemented yet; when Gmail/Graph adapters are added, tokens should be stored through the same OS secure-store layer.
+- Gmail OAuth token JSON and Microsoft Graph MSAL token caches are stored through the same OS secure-store layer.
 
 MFA:
 
@@ -273,6 +273,14 @@ arg verify-sync \
   --nordpass-export /path/to/nordpass-export.csv
 ```
 
+Run a marked live vault test:
+
+```bash
+arg vault-live-test --username you@example.com
+```
+
+This creates a clearly named `ARG-LIVE-TEST-*` credential in Bitwarden if `bw` and `BW_SESSION` are available, and stages a NordPass CSV for manual import. On a machine without Bitwarden CLI/session, use `--skip-bitwarden` to test only the NordPass staging path.
+
 Show a broader drift dashboard from vault exports:
 
 ```bash
@@ -383,6 +391,8 @@ account-recovery-guard/
     test_risk.py                    Verifies local risk scoring.
     test_secure_files.py            Verifies stale CSV warnings.
     test_vault_dashboard.py         Verifies vault drift dashboard rows.
+    test_live_vault.py              Verifies live-vault preflight and safe test entry construction.
+    test_gui_workflow.py            Verifies copyable GUI command previews.
     test_sync.py                    Verifies vault drift detection.
 ```
 

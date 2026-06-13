@@ -3,6 +3,8 @@ from __future__ import annotations
 import sys
 from pathlib import Path
 
+from .clipboard import copy_text
+from .gui_workflow import build_command_preview
 from .passkeys import passkey_guidance
 from .rotation import build_rotation_choices, summarize_rotation_choices
 from .secure_files import plaintext_file_warning
@@ -13,6 +15,7 @@ def main() -> int:
         from PySide6.QtCore import Qt
         from PySide6.QtWidgets import (
             QApplication,
+            QCheckBox,
             QGridLayout,
             QGroupBox,
             QLabel,
@@ -36,6 +39,7 @@ def main() -> int:
             self.resize(980, 680)
             tabs = QTabWidget()
             tabs.addTab(self._overview_tab(), "Overview")
+            tabs.addTab(self._workflow_tab(), "Workflow")
             tabs.addTab(self._rotation_tab(), "Rotation")
             tabs.addTab(self._vault_tab(), "Vault Drift")
             tabs.addTab(self._security_tab(), "Security")
@@ -56,6 +60,59 @@ def main() -> int:
                 "5. verify-sync\n"
             )
             layout.addWidget(summary)
+            return page
+
+        def _workflow_tab(self) -> QWidget:
+            page = QWidget()
+            layout = QGridLayout(page)
+            service = QLineEdit("Example")
+            username = QLineEdit("you@example.com")
+            url = QLineEdit("https://example.com")
+            reset_link = QLineEdit("")
+            open_reset = QCheckBox("Open reset link")
+            copy_selected = QCheckBox("Copy selected password")
+            preview = QTextEdit()
+            preview.setReadOnly(True)
+
+            def update_preview() -> None:
+                command = build_command_preview(
+                    "rotate",
+                    {
+                        "service": service.text(),
+                        "username": username.text(),
+                        "url": url.text(),
+                        "reset_link": reset_link.text(),
+                        "open": open_reset.isChecked(),
+                        "copy_selected": copy_selected.isChecked(),
+                    },
+                )
+                preview.setText(command)
+
+            def copy_preview() -> None:
+                copy_text(preview.toPlainText(), clear_after_seconds=0)
+
+            for widget in (service, username, url, reset_link):
+                widget.textChanged.connect(update_preview)
+            open_reset.stateChanged.connect(update_preview)
+            copy_selected.stateChanged.connect(update_preview)
+            layout.addWidget(QLabel("Service"), 0, 0)
+            layout.addWidget(service, 0, 1)
+            layout.addWidget(QLabel("Username"), 1, 0)
+            layout.addWidget(username, 1, 1)
+            layout.addWidget(QLabel("URL"), 2, 0)
+            layout.addWidget(url, 2, 1)
+            layout.addWidget(QLabel("Reset Link"), 3, 0)
+            layout.addWidget(reset_link, 3, 1)
+            layout.addWidget(open_reset, 4, 0)
+            layout.addWidget(copy_selected, 4, 1)
+            build_button = QPushButton("Build Rotation Command")
+            build_button.clicked.connect(update_preview)
+            copy_button = QPushButton("Copy Command")
+            copy_button.clicked.connect(copy_preview)
+            layout.addWidget(build_button, 5, 0)
+            layout.addWidget(copy_button, 5, 1)
+            layout.addWidget(preview, 6, 0, 1, 2)
+            update_preview()
             return page
 
         def _rotation_tab(self) -> QWidget:
@@ -86,6 +143,15 @@ def main() -> int:
                     return
                 reveal.setText(generated[index].password)
 
+            def copy_selected() -> None:
+                generated = getattr(choices, "generated", [])
+                index = choices.currentRow()
+                if index < 0 or index >= len(generated):
+                    reveal.setText("Select one generated password first.")
+                    return
+                copied = copy_text(generated[index].password, clear_after_seconds=60)
+                reveal.setText("Selected password copied; clipboard clear scheduled in 60 seconds." if copied else "Clipboard copy is unavailable.")
+
             layout.addWidget(QLabel("Service"), 0, 0)
             layout.addWidget(self.service, 0, 1)
             layout.addWidget(QLabel("Username"), 1, 0)
@@ -98,7 +164,10 @@ def main() -> int:
             layout.addWidget(choices, 4, 0, 1, 2)
             reveal_button = QPushButton("Reveal Selected")
             reveal_button.clicked.connect(reveal_selected)
-            layout.addWidget(reveal_button, 5, 0, 1, 2)
+            copy_button = QPushButton("Copy Selected")
+            copy_button.clicked.connect(copy_selected)
+            layout.addWidget(reveal_button, 5, 0)
+            layout.addWidget(copy_button, 5, 1)
             layout.addWidget(reveal, 6, 0, 1, 2)
             return page
 
@@ -108,9 +177,11 @@ def main() -> int:
             text = QTextEdit()
             text.setReadOnly(True)
             text.setText(
-                "Vault drift dashboard is powered by verify-sync and build_vault_dashboard().\n\n"
+                "Vault drift dashboard is powered by verify-sync, vault-dashboard, and build_vault_dashboard().\n\n"
                 "Statuses: in_sync, drift, bitwarden_only, nordpass_only.\n"
-                "Export NordPass CSV after import, then run verify-sync from the CLI."
+                "Live test command:\n"
+                "account-recovery-guard vault-live-test --username you@example.com\n\n"
+                "Export NordPass CSV after import, then run verify-sync or vault-dashboard from the CLI."
             )
             layout.addWidget(text)
             return page

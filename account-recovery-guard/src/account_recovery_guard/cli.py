@@ -10,6 +10,7 @@ from .breach_checker import HibpBreachChecker
 from .clipboard import copy_text
 from .email_scanner import ImapEmailScanner, ImapMailboxConfig
 from .gui import main as gui_main
+from .live_vault_test import build_live_test_candidate, preflight, summarize_preflight
 from .models import PasswordCandidate, VaultEntry
 from .oauth_mail import GmailApiMailProvider, GmailOAuthConfig, GraphOAuthConfig, MicrosoftGraphMailProvider
 from .passkeys import passkey_guidance
@@ -111,6 +112,13 @@ def main() -> None:
     dashboard.add_argument("--bitwarden-export", required=True)
     dashboard.add_argument("--nordpass-export", required=True)
 
+    live = sub.add_parser("vault-live-test", help="Safely test Bitwarden write and NordPass import staging with a marked test entry")
+    live.add_argument("--username", required=True)
+    live.add_argument("--nordpass-csv", default=str(default_data_path() / "arg-live-test-nordpass-import.csv"))
+    live.add_argument("--nordpass-export")
+    live.add_argument("--skip-bitwarden", action="store_true")
+    live.add_argument("--yes", action="store_true", help="Do not prompt; required for non-interactive test writes")
+
     passkey = sub.add_parser("passkey-guidance", help="Show safe passkey enrollment guidance")
     passkey.add_argument("--service", required=True)
 
@@ -154,6 +162,8 @@ def main() -> None:
         _verify_sync(args)
     elif args.command == "vault-dashboard":
         _vault_dashboard(args)
+    elif args.command == "vault-live-test":
+        _vault_live_test(args)
     elif args.command == "passkey-guidance":
         for step in passkey_guidance(args.service):
             print(f"- {step}")
@@ -280,12 +290,13 @@ def _rotate(args: argparse.Namespace) -> None:
         selected = choices[int(selection) - 1]
     except (ValueError, IndexError) as exc:
         raise SystemExit("Invalid password selection.") from exc
-    print(f"Selected password: {selected.password}")
     if args.copy_selected:
         if copy_text(selected.password, clear_after_seconds=60):
-            print("Selected password copied to clipboard; clipboard clear scheduled in 60 seconds.")
+            print("Selected password copied to clipboard; clipboard clear scheduled in 60 seconds. Plaintext was not printed.")
         else:
-            print("Clipboard copy is not available on this platform/session.")
+            raise SystemExit("Clipboard copy is not available on this platform/session. Plaintext was not printed; rerun without --copy-selected to reveal manually.")
+    else:
+        print(f"Selected password: {selected.password}")
     if args.open and args.reset_link:
         open_reset_link(args.reset_link)
     confirmation = input("After changing the password on the service, type ROTATED to update vaults: ").strip()
@@ -350,6 +361,32 @@ def _vault_dashboard(args: argparse.Namespace) -> None:
         print(f"[{row.status}] {row.service_name} / {row.username}")
         if row.differences:
             print(f"  differences: {', '.join(row.differences)}")
+
+
+def _vault_live_test(args: argparse.Namespace) -> None:
+    export_path = Path(args.nordpass_export) if args.nordpass_export else None
+    preflight_result = preflight(export_path)
+    summary = summarize_preflight(preflight_result)
+    blockers = [blocker for blocker in summary.blockers if not (args.skip_bitwarden and blocker in {"Bitwarden CLI not found", "BW_SESSION is not set"})]
+    if blockers:
+        raise SystemExit("Live vault test blocked: " + "; ".join(blockers))
+
+    candidate = build_live_test_candidate(args.username)
+    print(f"Prepared marked test entry: {candidate.service_name} / {candidate.username}")
+    if not args.yes:
+        confirmation = input("Type LIVE-TEST to write the marked test entry and stage NordPass CSV: ").strip()
+        if confirmation != "LIVE-TEST":
+            raise SystemExit("Live vault test aborted.")
+
+    if not args.skip_bitwarden:
+        entry = BitwardenVault().upsert_login(candidate)
+        AuditLogger().write("bitwarden_live_test_upsert", service=entry.service_name, username=entry.username)
+        print(f"Bitwarden test entry written: {entry.service_name} / {entry.password_fingerprint}")
+
+    csv_path = NordPassImportVault().stage_import([candidate], Path(args.nordpass_csv))
+    AuditLogger().write("nordpass_live_test_import_staged", service=candidate.service_name, username=candidate.username, path=str(csv_path))
+    print(f"NordPass test import CSV staged at: {csv_path}")
+    print("Import that CSV into NordPass, export NordPass, then run verify-sync for the marked service.")
 
 
 def _csv_status(args: argparse.Namespace) -> None:

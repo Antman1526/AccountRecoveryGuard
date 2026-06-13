@@ -90,3 +90,16 @@ class VaultDashboardRow:
     username: str
     status: Literal["in_sync", "drift", "bitwarden_only", "nordpass_only"]
     differences: list[str] = field(default_factory=list)
+
+
+@dataclass(frozen=True)
+class VaultPreflight:
+    bitwarden_cli_found: bool
+    bitwarden_session_present: bool
+    nordpass_export_present: bool | None = None
+
+
+@dataclass(frozen=True)
+class VaultPreflightSummary:
+    ready: bool
+    blockers: list[str] = field(default_factory=list)

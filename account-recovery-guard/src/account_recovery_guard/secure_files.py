@@ -17,7 +17,18 @@ def plaintext_file_warning(path: Path, ttl_seconds: int = 300) -> str | None:
 
 
 def delete_file(path: Path) -> bool:
+    return secure_delete_file(path)
+
+
+def secure_delete_file(path: Path) -> bool:
     if not path.exists():
         return False
+    try:
+        size = path.stat().st_size
+        with path.open("r+b") as handle:
+            handle.write(b"\x00" * size)
+            handle.flush()
+    except OSError:
+        pass
     path.unlink()
     return True
