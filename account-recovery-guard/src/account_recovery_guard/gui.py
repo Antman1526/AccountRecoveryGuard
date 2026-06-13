@@ -4,8 +4,9 @@ import sys
 from pathlib import Path
 
 from .clipboard import copy_text
-from .gui_workflow import build_command_preview
+from .gui_workflow import build_command_preview, recovery_stages, suggested_next_actions
 from .passkeys import passkey_guidance
+from .paths import user_state_dir
 from .rotation import build_rotation_choices, summarize_rotation_choices
 from .secure_files import plaintext_file_warning
 
@@ -13,17 +14,25 @@ from .secure_files import plaintext_file_warning
 def main() -> int:
     try:
         from PySide6.QtCore import Qt
+        from PySide6.QtGui import QFont
         from PySide6.QtWidgets import (
             QApplication,
+            QButtonGroup,
             QCheckBox,
+            QComboBox,
+            QFrame,
             QGridLayout,
             QGroupBox,
+            QHBoxLayout,
             QLabel,
             QLineEdit,
             QListWidget,
             QMainWindow,
             QPushButton,
-            QTabWidget,
+            QScrollArea,
+            QSizePolicy,
+            QSpinBox,
+            QStackedWidget,
             QTextEdit,
             QVBoxLayout,
             QWidget,
@@ -36,43 +45,269 @@ def main() -> int:
         def __init__(self) -> None:
             super().__init__()
             self.setWindowTitle("Account Recovery Guard")
-            self.resize(980, 680)
-            tabs = QTabWidget()
-            tabs.addTab(self._overview_tab(), "Overview")
-            tabs.addTab(self._workflow_tab(), "Workflow")
-            tabs.addTab(self._rotation_tab(), "Rotation")
-            tabs.addTab(self._vault_tab(), "Vault Drift")
-            tabs.addTab(self._security_tab(), "Security")
-            self.setCentralWidget(tabs)
+            self.resize(1180, 760)
+            self.setMinimumSize(980, 660)
 
-        def _overview_tab(self) -> QWidget:
+            root = QWidget()
+            root_layout = QHBoxLayout(root)
+            root_layout.setContentsMargins(0, 0, 0, 0)
+            root_layout.setSpacing(0)
+
+            self.stack = QStackedWidget()
+            self.nav_group = QButtonGroup(self)
+            self.nav_group.setExclusive(True)
+
+            root_layout.addWidget(self._sidebar())
+            root_layout.addWidget(self.stack, 1)
+            self.setCentralWidget(root)
+
+            self.stack.addWidget(self._home_page())
+            self.stack.addWidget(self._mail_page())
+            self.stack.addWidget(self._rotation_page())
+            self.stack.addWidget(self._vault_page())
+            self.stack.addWidget(self._security_page())
+            self.nav_group.button(0).setChecked(True)
+            self.stack.setCurrentIndex(0)
+
+        def _sidebar(self) -> QFrame:
+            sidebar = QFrame()
+            sidebar.setObjectName("sidebar")
+            sidebar.setFixedWidth(270)
+            layout = QVBoxLayout(sidebar)
+            layout.setContentsMargins(22, 26, 22, 22)
+            layout.setSpacing(12)
+
+            title = QLabel("Account\nRecovery Guard")
+            title.setObjectName("brandTitle")
+            title.setWordWrap(True)
+            subtitle = QLabel("Local-first password recovery and vault sync.")
+            subtitle.setObjectName("brandSubtitle")
+            subtitle.setWordWrap(True)
+            layout.addWidget(title)
+            layout.addWidget(subtitle)
+            layout.addSpacing(18)
+
+            for index, label in enumerate(("Dashboard", "Scan Mail", "Rotate", "Vault Sync", "Security")):
+                button = QPushButton(label)
+                button.setObjectName("navButton")
+                button.setCheckable(True)
+                button.setCursor(Qt.CursorShape.PointingHandCursor)
+                button.clicked.connect(lambda checked=False, page=index: self.stack.setCurrentIndex(page))
+                self.nav_group.addButton(button, index)
+                layout.addWidget(button)
+
+            layout.addStretch(1)
+            trust = QLabel("No plaintext passwords are logged. OAuth tokens stay in the OS credential store.")
+            trust.setObjectName("sidebarNote")
+            trust.setWordWrap(True)
+            layout.addWidget(trust)
+            return sidebar
+
+        def _scroll_page(self, title: str, subtitle: str) -> QScrollArea:
             page = QWidget()
             layout = QVBoxLayout(page)
-            summary = QTextEdit()
-            summary.setReadOnly(True)
-            summary.setText(
-                "Use the CLI commands for live inbox and vault operations until OAuth consent is configured.\n\n"
-                "Recommended flow:\n"
-                "1. discover-imap or OAuth mail adapter\n"
-                "2. breach-check\n"
-                "3. rotate\n"
-                "4. import NordPass CSV\n"
-                "5. verify-sync\n"
+            layout.setContentsMargins(34, 28, 34, 34)
+            layout.setSpacing(20)
+
+            heading = QLabel(title)
+            heading.setObjectName("pageTitle")
+            heading.setWordWrap(True)
+            heading.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Minimum)
+            sub = QLabel(subtitle)
+            sub.setObjectName("pageSubtitle")
+            sub.setWordWrap(True)
+            layout.addWidget(heading)
+            layout.addWidget(sub)
+
+            scroll = QScrollArea()
+            scroll.setWidgetResizable(True)
+            scroll.setFrameShape(QFrame.Shape.NoFrame)
+            scroll.setWidget(page)
+            scroll.setObjectName("pageScroll")
+            scroll.content_layout = layout  # type: ignore[attr-defined]
+            return scroll
+
+        def _card(self, title: str, body: str, badge: str | None = None) -> QFrame:
+            card = QFrame()
+            card.setObjectName("card")
+            layout = QVBoxLayout(card)
+            layout.setContentsMargins(18, 16, 18, 16)
+            layout.setSpacing(9)
+            row = QHBoxLayout()
+            heading = QLabel(title)
+            heading.setObjectName("cardTitle")
+            heading.setWordWrap(True)
+            row.addWidget(heading, 1)
+            if badge:
+                pill = QLabel(badge)
+                pill.setObjectName("badge")
+                pill.setAlignment(Qt.AlignmentFlag.AlignCenter)
+                row.addWidget(pill)
+            layout.addLayout(row)
+            text = QLabel(body)
+            text.setObjectName("cardText")
+            text.setWordWrap(True)
+            layout.addWidget(text)
+            return card
+
+        def _command_box(self) -> QTextEdit:
+            preview = QTextEdit()
+            preview.setObjectName("commandBox")
+            preview.setReadOnly(True)
+            preview.setMinimumHeight(96)
+            preview.setFont(QFont("Menlo", 12))
+            return preview
+
+        def _copy_button(self, label: str, text_provider) -> QPushButton:
+            button = QPushButton(label)
+            button.setObjectName("secondaryButton")
+            button.setCursor(Qt.CursorShape.PointingHandCursor)
+            button.clicked.connect(lambda: copy_text(text_provider(), clear_after_seconds=0))
+            return button
+
+        def _home_page(self) -> QScrollArea:
+            page = self._scroll_page(
+                "Recover compromised accounts with both vaults kept in sync",
+                "Scan account alerts, choose a new password, update Bitwarden, stage NordPass import, and verify the two vaults match.",
             )
-            layout.addWidget(summary)
+            layout = page.content_layout  # type: ignore[attr-defined]
+
+            flow_grid = QGridLayout()
+            flow_grid.setSpacing(14)
+            for index, stage in enumerate(recovery_stages()):
+                card = self._card(stage.title, stage.detail, stage.status)
+                command = QLabel(stage.command)
+                command.setObjectName("commandLabel")
+                card.layout().addWidget(command)
+                flow_grid.addWidget(card, index // 2, index % 2)
+            layout.addLayout(flow_grid)
+
+            action_box = QFrame()
+            action_box.setObjectName("panel")
+            action_layout = QVBoxLayout(action_box)
+            action_layout.setContentsMargins(22, 20, 22, 20)
+            action_layout.setSpacing(10)
+            action_title = QLabel("Suggested path")
+            action_title.setObjectName("sectionTitle")
+            action_layout.addWidget(action_title)
+            for action in suggested_next_actions():
+                label = QLabel("- " + action)
+                label.setObjectName("listText")
+                label.setWordWrap(True)
+                action_layout.addWidget(label)
+            layout.addWidget(action_box)
+
+            status_grid = QGridLayout()
+            status_grid.setSpacing(14)
+            statuses = (
+                ("Mail scan", "Gmail, Outlook, or IMAP"),
+                ("Password choices", "Five generated options"),
+                ("Bitwarden", "Official bw CLI write"),
+                ("NordPass", "Supported CSV import"),
+            )
+            for index, (title, body) in enumerate(statuses):
+                status_grid.addWidget(self._card(title, body, "ready"), 0, index)
+            layout.addLayout(status_grid)
+            layout.addStretch(1)
             return page
 
-        def _workflow_tab(self) -> QWidget:
-            page = QWidget()
-            layout = QGridLayout(page)
+        def _mail_page(self) -> QScrollArea:
+            page = self._scroll_page(
+                "Scan email for hacked-account signals",
+                "Build the safest scan command for Gmail, Outlook, or IMAP. Secrets are referenced by name and read from the OS credential store.",
+            )
+            layout = page.content_layout  # type: ignore[attr-defined]
+            panel = QFrame()
+            panel.setObjectName("panel")
+            form = QGridLayout(panel)
+            form.setContentsMargins(22, 20, 22, 20)
+            form.setHorizontalSpacing(14)
+            form.setVerticalSpacing(12)
+
+            provider = QComboBox()
+            provider.addItems(["Gmail API", "Microsoft Graph", "IMAP"])
+            email = QLineEdit("you@example.com")
+            host = QLineEdit("imap.example.com")
+            secret_name = QLineEdit("mail-password-or-token")
+            client_secret = QLineEdit("client_secret.json")
+            tenant_id = QLineEdit("common")
+            client_id = QLineEdit("")
+            days = QSpinBox()
+            days.setRange(1, 3650)
+            days.setValue(30)
+            preview = self._command_box()
+
+            def update_preview() -> None:
+                if provider.currentText() == "Gmail API":
+                    command = build_command_preview(
+                        "scan-gmail",
+                        {"client_secret_file": client_secret.text(), "token_secret_name": secret_name.text(), "days": days.value()},
+                    )
+                elif provider.currentText() == "Microsoft Graph":
+                    command = build_command_preview(
+                        "scan-graph",
+                        {"tenant_id": tenant_id.text(), "client_id": client_id.text(), "token_secret_name": secret_name.text(), "days": days.value()},
+                    )
+                else:
+                    command = build_command_preview(
+                        "scan-imap",
+                        {"host": host.text(), "username": email.text(), "secret_name": secret_name.text(), "days": days.value(), "json": True},
+                    )
+                preview.setText(command)
+
+            widgets = (
+                ("Provider", provider),
+                ("Mailbox username", email),
+                ("IMAP host", host),
+                ("Credential secret name", secret_name),
+                ("Gmail client secret file", client_secret),
+                ("Microsoft tenant", tenant_id),
+                ("Microsoft client ID", client_id),
+                ("Days to scan", days),
+            )
+            for row, (label, widget) in enumerate(widgets):
+                form.addWidget(QLabel(label), row, 0)
+                form.addWidget(widget, row, 1)
+            provider.currentTextChanged.connect(update_preview)
+            for widget in (email, host, secret_name, client_secret, tenant_id, client_id):
+                widget.textChanged.connect(update_preview)
+            days.valueChanged.connect(update_preview)
+            form.addWidget(QLabel("Command preview"), len(widgets), 0)
+            form.addWidget(preview, len(widgets), 1)
+            copy = self._copy_button("Copy scan command", preview.toPlainText)
+            form.addWidget(copy, len(widgets) + 1, 1, alignment=Qt.AlignmentFlag.AlignRight)
+            layout.addWidget(panel)
+            update_preview()
+            return page
+
+        def _rotation_page(self) -> QScrollArea:
+            page = self._scroll_page(
+                "Rotate one risky account at a time",
+                "Generate five strong passwords, select one, open the reset flow if available, then copy only the chosen password.",
+            )
+            layout = page.content_layout  # type: ignore[attr-defined]
+            panel = QFrame()
+            panel.setObjectName("panel")
+            form = QGridLayout(panel)
+            form.setContentsMargins(22, 20, 22, 20)
+            form.setHorizontalSpacing(14)
+            form.setVerticalSpacing(12)
+
             service = QLineEdit("Example")
             username = QLineEdit("you@example.com")
             url = QLineEdit("https://example.com")
             reset_link = QLineEdit("")
-            open_reset = QCheckBox("Open reset link")
-            copy_selected = QCheckBox("Copy selected password")
-            preview = QTextEdit()
-            preview.setReadOnly(True)
+            open_reset = QCheckBox("Open reset link during rotation")
+            copy_selected = QCheckBox("Copy selected password and clear clipboard after 60 seconds")
+            copy_selected.setChecked(True)
+            choices = QListWidget()
+            choices.setObjectName("choiceList")
+            choices.setMinimumHeight(176)
+            result = QTextEdit()
+            result.setObjectName("resultBox")
+            result.setReadOnly(True)
+            result.setMinimumHeight(82)
+            preview = self._command_box()
 
             def update_preview() -> None:
                 command = build_command_preview(
@@ -88,121 +323,219 @@ def main() -> int:
                 )
                 preview.setText(command)
 
-            def copy_preview() -> None:
-                copy_text(preview.toPlainText(), clear_after_seconds=0)
-
-            for widget in (service, username, url, reset_link):
-                widget.textChanged.connect(update_preview)
-            open_reset.stateChanged.connect(update_preview)
-            copy_selected.stateChanged.connect(update_preview)
-            layout.addWidget(QLabel("Service"), 0, 0)
-            layout.addWidget(service, 0, 1)
-            layout.addWidget(QLabel("Username"), 1, 0)
-            layout.addWidget(username, 1, 1)
-            layout.addWidget(QLabel("URL"), 2, 0)
-            layout.addWidget(url, 2, 1)
-            layout.addWidget(QLabel("Reset Link"), 3, 0)
-            layout.addWidget(reset_link, 3, 1)
-            layout.addWidget(open_reset, 4, 0)
-            layout.addWidget(copy_selected, 4, 1)
-            build_button = QPushButton("Build Rotation Command")
-            build_button.clicked.connect(update_preview)
-            copy_button = QPushButton("Copy Command")
-            copy_button.clicked.connect(copy_preview)
-            layout.addWidget(build_button, 5, 0)
-            layout.addWidget(copy_button, 5, 1)
-            layout.addWidget(preview, 6, 0, 1, 2)
-            update_preview()
-            return page
-
-        def _rotation_tab(self) -> QWidget:
-            page = QWidget()
-            layout = QGridLayout(page)
-            self.service = QLineEdit("Example")
-            self.username = QLineEdit("you@example.com")
-            self.url = QLineEdit("https://example.com")
-            choices = QListWidget()
-            reveal = QTextEdit()
-            reveal.setReadOnly(True)
-            reveal.setPlaceholderText("Selected password appears here only after you generate and choose it.")
-
             def generate() -> None:
-                generated = build_rotation_choices(self.service.text(), self.username.text(), self.url.text())
+                generated = build_rotation_choices(service.text(), username.text(), url.text())
                 choices.clear()
                 choices.generated = generated  # type: ignore[attr-defined]
                 for row in summarize_rotation_choices([candidate.password for candidate in generated]):
                     choices.addItem(
-                        f"{row.index}. {row.display}  length={row.length}  upper={row.has_uppercase} digit={row.has_digit} symbol={row.has_symbol}"
+                        f"Choice {row.index}: {row.display}    length {row.length}    upper {row.has_uppercase}    digit {row.has_digit}    symbol {row.has_symbol}"
                     )
+                result.setText("Five choices generated. Select one, complete the reset page, then copy the selected password.")
 
             def reveal_selected() -> None:
                 generated = getattr(choices, "generated", [])
                 index = choices.currentRow()
                 if index < 0 or index >= len(generated):
-                    reveal.setText("Select one generated password first.")
+                    result.setText("Select one generated password first.")
                     return
-                reveal.setText(generated[index].password)
+                result.setText(generated[index].password)
 
-            def copy_selected() -> None:
+            def copy_password() -> None:
                 generated = getattr(choices, "generated", [])
                 index = choices.currentRow()
                 if index < 0 or index >= len(generated):
-                    reveal.setText("Select one generated password first.")
+                    result.setText("Select one generated password first.")
                     return
                 copied = copy_text(generated[index].password, clear_after_seconds=60)
-                reveal.setText("Selected password copied; clipboard clear scheduled in 60 seconds." if copied else "Clipboard copy is unavailable.")
+                result.setText("Selected password copied. The clipboard clear timer is set for 60 seconds." if copied else "Clipboard copy is unavailable.")
 
-            layout.addWidget(QLabel("Service"), 0, 0)
-            layout.addWidget(self.service, 0, 1)
-            layout.addWidget(QLabel("Username"), 1, 0)
-            layout.addWidget(self.username, 1, 1)
-            layout.addWidget(QLabel("URL"), 2, 0)
-            layout.addWidget(self.url, 2, 1)
-            generate_button = QPushButton("Generate 5 Choices")
+            for widget in (service, username, url, reset_link):
+                widget.textChanged.connect(update_preview)
+            open_reset.stateChanged.connect(update_preview)
+            copy_selected.stateChanged.connect(update_preview)
+
+            fields = (("Service", service), ("Username", username), ("Login URL", url), ("Reset link", reset_link))
+            for row, (label, widget) in enumerate(fields):
+                form.addWidget(QLabel(label), row, 0)
+                form.addWidget(widget, row, 1)
+            form.addWidget(open_reset, 4, 1)
+            form.addWidget(copy_selected, 5, 1)
+            generate_button = QPushButton("Generate 5 choices")
+            generate_button.setObjectName("primaryButton")
             generate_button.clicked.connect(generate)
-            layout.addWidget(generate_button, 3, 0, 1, 2)
-            layout.addWidget(choices, 4, 0, 1, 2)
-            reveal_button = QPushButton("Reveal Selected")
+            copy_button = QPushButton("Copy selected password")
+            copy_button.setObjectName("primaryButton")
+            copy_button.clicked.connect(copy_password)
+            reveal_button = QPushButton("Reveal selected")
+            reveal_button.setObjectName("secondaryButton")
             reveal_button.clicked.connect(reveal_selected)
-            copy_button = QPushButton("Copy Selected")
-            copy_button.clicked.connect(copy_selected)
-            layout.addWidget(reveal_button, 5, 0)
-            layout.addWidget(copy_button, 5, 1)
-            layout.addWidget(reveal, 6, 0, 1, 2)
+            button_row = QHBoxLayout()
+            button_row.addWidget(generate_button)
+            button_row.addWidget(copy_button)
+            button_row.addWidget(reveal_button)
+            button_row.addStretch(1)
+            form.addLayout(button_row, 6, 1)
+            form.addWidget(QLabel("Password choices"), 7, 0)
+            form.addWidget(choices, 7, 1)
+            form.addWidget(QLabel("Status"), 8, 0)
+            form.addWidget(result, 8, 1)
+            form.addWidget(QLabel("CLI equivalent"), 9, 0)
+            form.addWidget(preview, 9, 1)
+            form.addWidget(self._copy_button("Copy rotate command", preview.toPlainText), 10, 1, alignment=Qt.AlignmentFlag.AlignRight)
+            layout.addWidget(panel)
+            update_preview()
             return page
 
-        def _vault_tab(self) -> QWidget:
-            page = QWidget()
-            layout = QVBoxLayout(page)
-            text = QTextEdit()
-            text.setReadOnly(True)
-            text.setText(
-                "Vault drift dashboard is powered by verify-sync, vault-dashboard, and build_vault_dashboard().\n\n"
-                "Statuses: in_sync, drift, bitwarden_only, nordpass_only.\n"
-                "Live test command:\n"
-                "account-recovery-guard vault-live-test --username you@example.com\n\n"
-                "Export NordPass CSV after import, then run verify-sync or vault-dashboard from the CLI."
+        def _vault_page(self) -> QScrollArea:
+            page = self._scroll_page(
+                "Write to Bitwarden, import to NordPass, verify drift",
+                "Bitwarden can be updated through the official bw CLI. NordPass personal vault sync uses the supported CSV import/export path.",
             )
-            layout.addWidget(text)
+            layout = page.content_layout  # type: ignore[attr-defined]
+
+            write_panel = QFrame()
+            write_panel.setObjectName("panel")
+            write_form = QGridLayout(write_panel)
+            write_form.setContentsMargins(22, 20, 22, 20)
+            service = QLineEdit("Example")
+            username = QLineEdit("you@example.com")
+            url = QLineEdit("https://example.com")
+            password_secret = QLineEdit("new-password-secret")
+            nordpass_csv = QLineEdit(str(user_state_dir("account-recovery-guard") / "nordpass-import.csv"))
+            write_preview = self._command_box()
+
+            def update_write() -> None:
+                write_preview.setText(
+                    build_command_preview(
+                        "write-vaults",
+                        {
+                            "service": service.text(),
+                            "username": username.text(),
+                            "url": url.text(),
+                            "password_secret": password_secret.text(),
+                            "nordpass_csv": nordpass_csv.text(),
+                        },
+                    )
+                )
+
+            for row, (label, widget) in enumerate(
+                (
+                    ("Service", service),
+                    ("Username", username),
+                    ("Login URL", url),
+                    ("Password secret name", password_secret),
+                    ("NordPass import CSV", nordpass_csv),
+                )
+            ):
+                write_form.addWidget(QLabel(label), row, 0)
+                write_form.addWidget(widget, row, 1)
+                widget.textChanged.connect(update_write)
+            write_form.addWidget(QLabel("Write command"), 5, 0)
+            write_form.addWidget(write_preview, 5, 1)
+            write_form.addWidget(self._copy_button("Copy write command", write_preview.toPlainText), 6, 1, alignment=Qt.AlignmentFlag.AlignRight)
+            layout.addWidget(write_panel)
+
+            verify_panel = QFrame()
+            verify_panel.setObjectName("panel")
+            verify_form = QGridLayout(verify_panel)
+            verify_form.setContentsMargins(22, 20, 22, 20)
+            bitwarden_export = QLineEdit("bitwarden-export.json")
+            nordpass_export = QLineEdit("nordpass-export.csv")
+            verify_preview = self._command_box()
+
+            def update_verify() -> None:
+                verify_preview.setText(
+                    build_command_preview(
+                        "vault-dashboard",
+                        {"bitwarden_export": bitwarden_export.text(), "nordpass_export": nordpass_export.text()},
+                    )
+                )
+
+            verify_form.addWidget(QLabel("Bitwarden export"), 0, 0)
+            verify_form.addWidget(bitwarden_export, 0, 1)
+            verify_form.addWidget(QLabel("NordPass export"), 1, 0)
+            verify_form.addWidget(nordpass_export, 1, 1)
+            verify_form.addWidget(QLabel("Drift command"), 2, 0)
+            verify_form.addWidget(verify_preview, 2, 1)
+            verify_form.addWidget(self._copy_button("Copy verify command", verify_preview.toPlainText), 3, 1, alignment=Qt.AlignmentFlag.AlignRight)
+            bitwarden_export.textChanged.connect(update_verify)
+            nordpass_export.textChanged.connect(update_verify)
+            layout.addWidget(verify_panel)
+            update_write()
+            update_verify()
             return page
 
-        def _security_tab(self) -> QWidget:
-            page = QWidget()
-            layout = QVBoxLayout(page)
-            passkey_box = QGroupBox("Passkey Guidance")
+        def _security_page(self) -> QScrollArea:
+            page = self._scroll_page(
+                "Security boundaries and cleanup",
+                "This tool keeps recovery local, but some steps stay intentionally manual because vaults, MFA, and reset pages are security controls.",
+            )
+            layout = page.content_layout  # type: ignore[attr-defined]
+
+            limits = QGridLayout()
+            limits.setSpacing(14)
+            limit_cards = (
+                ("Passkeys", "Store passkeys in your phone or OS account where the service supports it; do not export them through this app."),
+                ("MFA", "The app can open reset links, but you complete MFA challenges yourself."),
+                ("NordPass", "Personal-vault writes are staged as CSV because NordPass does not provide a public personal-vault CRUD API."),
+                ("Logs", "Audit events record actions and counts, never plaintext passwords or token values."),
+            )
+            for index, (title, body) in enumerate(limit_cards):
+                limits.addWidget(self._card(title, body, "guardrail"), index // 2, index % 2)
+            layout.addLayout(limits)
+
+            passkey_box = QGroupBox("Passkey guidance example")
+            passkey_box.setObjectName("group")
             passkey_layout = QVBoxLayout(passkey_box)
             for step in passkey_guidance("github"):
-                label = QLabel(step)
+                label = QLabel("- " + step)
+                label.setObjectName("listText")
                 label.setWordWrap(True)
                 passkey_layout.addWidget(label)
-            csv_warning = QLabel(plaintext_file_warning(Path("nordpass-import.csv")) or "No stale NordPass CSV detected in this folder.")
-            csv_warning.setWordWrap(True)
-            csv_warning.setAlignment(Qt.AlignmentFlag.AlignTop)
             layout.addWidget(passkey_box)
+
+            csv_warning = QLabel(plaintext_file_warning(Path("nordpass-import.csv")) or "No stale NordPass CSV detected in the current folder.")
+            csv_warning.setObjectName("warningText")
+            csv_warning.setWordWrap(True)
             layout.addWidget(csv_warning)
             return page
 
     app = QApplication(sys.argv)
+    app.setStyleSheet(
+        """
+        QMainWindow, QWidget { background: #f4f7f8; color: #14252d; font-family: Arial; font-size: 14px; }
+        QFrame#sidebar { background: #10232b; }
+        QLabel#brandTitle { color: #ffffff; font-size: 27px; font-weight: 800; line-height: 1.05; }
+        QLabel#brandSubtitle, QLabel#sidebarNote { color: #b8cbd2; line-height: 1.35; }
+        QLabel#sidebarNote { border-top: 1px solid #29414b; padding-top: 14px; font-size: 12px; }
+        QPushButton#navButton { background: transparent; color: #c6d7dd; border: 0; border-radius: 8px; padding: 12px 14px; text-align: left; font-weight: 650; }
+        QPushButton#navButton:hover { background: #1b3440; color: #ffffff; }
+        QPushButton#navButton:checked { background: #d9f2ef; color: #10232b; }
+        QScrollArea#pageScroll { background: #f4f7f8; }
+        QLabel#pageTitle { font-size: 30px; font-weight: 800; color: #10232b; line-height: 1.15; }
+        QLabel#pageSubtitle { font-size: 15px; color: #526873; line-height: 1.4; max-width: 760px; }
+        QLabel#sectionTitle { font-size: 18px; font-weight: 800; color: #10232b; }
+        QFrame#card, QFrame#panel, QGroupBox#group { background: #ffffff; border: 1px solid #dbe6ea; border-radius: 10px; }
+        QGroupBox#group { margin-top: 14px; padding: 18px 14px 14px 14px; font-weight: 800; }
+        QGroupBox#group::title { subcontrol-origin: margin; left: 14px; padding: 0 5px; color: #10232b; }
+        QLabel#cardTitle { font-size: 16px; font-weight: 800; color: #10232b; }
+        QLabel#cardText, QLabel#listText { color: #526873; line-height: 1.4; }
+        QLabel#badge { background: #e3f6f1; color: #0b594f; border: 1px solid #bde6dc; border-radius: 999px; padding: 4px 10px; font-size: 11px; font-weight: 800; text-transform: uppercase; }
+        QLabel#commandLabel { color: #174e57; background: #eef7f8; border-radius: 6px; padding: 7px 9px; font-family: Menlo; font-size: 12px; }
+        QLabel#warningText { background: #fff7ed; color: #7c2d12; border: 1px solid #fed7aa; border-radius: 8px; padding: 12px; }
+        QLineEdit, QComboBox, QSpinBox { background: #fbfdfe; border: 1px solid #cbd9de; border-radius: 8px; padding: 9px 10px; min-height: 20px; }
+        QLineEdit:focus, QComboBox:focus, QSpinBox:focus { border: 1px solid #1f7a74; background: #ffffff; }
+        QTextEdit#commandBox, QTextEdit#resultBox, QListWidget#choiceList { background: #fbfdfe; border: 1px solid #cbd9de; border-radius: 8px; padding: 10px; }
+        QTextEdit#commandBox { color: #16333c; }
+        QPushButton#primaryButton, QPushButton#secondaryButton { border-radius: 8px; padding: 10px 14px; font-weight: 800; min-height: 22px; }
+        QPushButton#primaryButton { background: #145c58; color: #ffffff; border: 1px solid #145c58; }
+        QPushButton#primaryButton:hover { background: #0f4d49; }
+        QPushButton#secondaryButton { background: #ffffff; color: #145c58; border: 1px solid #a9c9c5; }
+        QPushButton#secondaryButton:hover { background: #eef7f6; }
+        QCheckBox { color: #344f59; spacing: 9px; }
+        """
+    )
     window = MainWindow()
     window.show()
     return app.exec()

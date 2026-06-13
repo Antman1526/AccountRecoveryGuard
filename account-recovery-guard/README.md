@@ -219,6 +219,14 @@ arg gui
 account-recovery-guard-gui
 ```
 
+The GUI opens to a guided recovery dashboard with five sections:
+
+- Dashboard: end-to-end recovery flow and current security boundaries.
+- Scan Mail: copyable Gmail, Outlook/Microsoft Graph, or IMAP scan commands.
+- Rotate: five generated password choices with copy-and-clear clipboard handling.
+- Vault Sync: Bitwarden write and NordPass import/export verification commands.
+- Security: passkey guidance, MFA boundaries, logging rules, and CSV cleanup warnings.
+
 Check an email address against Have I Been Pwned:
 
 ```bash
@@ -366,7 +374,8 @@ account-recovery-guard/
     clipboard.py                     Clipboard copy with delayed clear where supported.
     cli.py                          Cross-platform command-line interface.
     email_scanner.py                IMAP scanner, body extraction, classifier, link extraction.
-    gui.py                          PySide6 desktop dashboard.
+    gui.py                          PySide6 guided desktop dashboard.
+    gui_workflow.py                 Shared GUI workflow copy and command preview helpers.
     models.py                       Dataclasses shared across modules.
     oauth_mail.py                    Gmail API and Microsoft Graph OAuth mail adapters.
     passkeys.py                     Passkey support guidance.
@@ -392,7 +401,7 @@ account-recovery-guard/
     test_secure_files.py            Verifies stale CSV warnings.
     test_vault_dashboard.py         Verifies vault drift dashboard rows.
     test_live_vault.py              Verifies live-vault preflight and safe test entry construction.
-    test_gui_workflow.py            Verifies copyable GUI command previews.
+    test_gui_workflow.py            Verifies copyable GUI command previews and recovery-flow copy.
     test_sync.py                    Verifies vault drift detection.
 ```
 
