@@ -2,18 +2,27 @@ import os
 
 import pytest
 
-pytest.importorskip("PySide6")
+from account_recovery_guard.gui_theme import calm_shield_stylesheet
 
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
-from PySide6.QtWidgets import QApplication
+try:
+    from PySide6.QtWidgets import QApplication
 
-from account_recovery_guard.gui_components import ProviderButton, StepHeader, StatusPill
-from account_recovery_guard.gui_theme import calm_shield_stylesheet
+    from account_recovery_guard.gui_components import ProviderButton, StepHeader, StatusPill
+except ImportError:
+    QApplication = None
+    ProviderButton = None
+    StepHeader = None
+    StatusPill = None
+
+pytestmark_widgets = pytest.mark.skipif(QApplication is None, reason="PySide6 is required for widget tests")
 
 
 @pytest.fixture(scope="module")
 def app():
+    if QApplication is None:
+        pytest.skip("PySide6 is required for widget tests")
     existing = QApplication.instance()
     return existing or QApplication([])
 
@@ -25,6 +34,40 @@ def test_theme_contains_primary_action_color():
     assert "primaryButton" in css
 
 
+def test_theme_covers_existing_gui_object_names():
+    css = calm_shield_stylesheet()
+
+    expected_selectors = (
+        "#sidebar",
+        "#brandTitle",
+        "#brandSubtitle",
+        "#sidebarNote",
+        "#navButton",
+        "#pageScroll",
+        "#sectionTitle",
+        "#cardTitle",
+        "#cardText",
+        "#listText",
+        "#badge",
+        "#commandLabel",
+        "#warningText",
+        "#group",
+        "#commandBox",
+        "#resultBox",
+        "#choiceList",
+        "QLineEdit",
+        "QComboBox",
+        "QSpinBox",
+        "QCheckBox",
+        "QCheckBox::indicator",
+    )
+
+    missing = [selector for selector in expected_selectors if selector not in css]
+
+    assert not missing
+
+
+@pytestmark_widgets
 def test_step_header_renders_title_and_subtitle(app):
     header = StepHeader("Connect email safely", "We scan account and security emails locally.")
 
@@ -32,6 +75,7 @@ def test_step_header_renders_title_and_subtitle(app):
     assert "locally" in header.subtitle.text()
 
 
+@pytestmark_widgets
 def test_provider_button_has_accessible_label(app):
     button = ProviderButton("Continue with Gmail", "Recommended for Gmail accounts")
 
@@ -39,6 +83,7 @@ def test_provider_button_has_accessible_label(app):
     assert "Gmail" in button.toolTip()
 
 
+@pytestmark_widgets
 def test_status_pill_exposes_status_text(app):
     pill = StatusPill("Needs attention", "attention")
 
