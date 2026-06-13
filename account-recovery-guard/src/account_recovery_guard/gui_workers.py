@@ -12,7 +12,7 @@ class ScanWorker(QObject):
 
     def __init__(self, service: GuiScanService, days_back: int = 30) -> None:
         super().__init__()
-        self.service = service
+        self.service: GuiScanService | None = service
         self.days_back = days_back
 
     @Slot()
@@ -20,8 +20,14 @@ class ScanWorker(QObject):
         try:
             for stage in scan_progress_stages():
                 self.progress.emit(stage)
+            if self.service is None:
+                raise RuntimeError("scan service unavailable")
             summary = self.service.scan(self.days_back)
         except Exception:
             self.failed.emit(SAFE_SCAN_FAILURE_MESSAGE)
             return
         self.finished.emit(summary)
+
+    @Slot()
+    def release_sensitive_refs(self) -> None:
+        self.service = None

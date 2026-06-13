@@ -21,6 +21,26 @@ class MailProvider(Protocol):
 
 
 SAFE_SCAN_FAILURE_MESSAGE = "The scan could not finish. Check your provider setup and try again."
+SETUP_DETAIL_MISSING_CLIENT_SECRET_FILE = "missing_client_secret_file"
+SETUP_DETAIL_MISSING_CLIENT_ID = "missing_client_id"
+SETUP_DETAIL_MISSING_IMAP_SETUP = "missing_imap_setup"
+SETUP_DETAIL_MISSING_SAVED_IMAP_SECRET = "missing_saved_imap_secret"
+SETUP_DETAIL_CREDENTIAL_STORE_UNAVAILABLE = "credential_store_unavailable"
+SETUP_DETAIL_MISSING_PROVIDER = "missing_provider"
+SETUP_DETAIL_MISSING_PROVIDER_INSTANCE = "missing_provider_instance"
+SETUP_DETAIL_SCAN_FAILED = "scan_failed"
+CONTROLLED_SETUP_DETAIL_CODES = frozenset(
+    {
+        SETUP_DETAIL_MISSING_CLIENT_SECRET_FILE,
+        SETUP_DETAIL_MISSING_CLIENT_ID,
+        SETUP_DETAIL_MISSING_IMAP_SETUP,
+        SETUP_DETAIL_MISSING_SAVED_IMAP_SECRET,
+        SETUP_DETAIL_CREDENTIAL_STORE_UNAVAILABLE,
+        SETUP_DETAIL_MISSING_PROVIDER,
+        SETUP_DETAIL_MISSING_PROVIDER_INSTANCE,
+        SETUP_DETAIL_SCAN_FAILED,
+    }
+)
 
 
 @dataclass(frozen=True)
@@ -56,6 +76,12 @@ class GuiVaultWriteResult:
     technical_details: str = ""
 
 
+def controlled_setup_detail_for_log(technical_details: str) -> str:
+    if technical_details in CONTROLLED_SETUP_DETAIL_CODES:
+        return technical_details
+    return ""
+
+
 def describe_provider_setup(provider: MailProviderChoice) -> ProviderSetupCopy:
     if provider == MailProviderChoice.GMAIL:
         return ProviderSetupCopy(
@@ -84,7 +110,7 @@ def build_provider_or_error(settings: MailProviderSettings) -> tuple[MailProvide
         if not client_secret_file or not client_secret_path.exists():
             return None, UserFacingSetupError(
                 user_message="Choose a Gmail setup file before starting the scan.",
-                technical_details="missing client_secret_file",
+                technical_details=SETUP_DETAIL_MISSING_CLIENT_SECRET_FILE,
             )
         from .oauth_mail import GmailApiMailProvider, GmailOAuthConfig
 
@@ -95,7 +121,7 @@ def build_provider_or_error(settings: MailProviderSettings) -> tuple[MailProvide
         if not client_id:
             return None, UserFacingSetupError(
                 user_message="Complete Outlook setup before starting the scan.",
-                technical_details="missing client_id",
+                technical_details=SETUP_DETAIL_MISSING_CLIENT_ID,
             )
         from .oauth_mail import GraphOAuthConfig, MicrosoftGraphMailProvider
 
@@ -115,16 +141,22 @@ def build_provider_or_error(settings: MailProviderSettings) -> tuple[MailProvide
     if missing:
         return None, UserFacingSetupError(
             user_message="Complete the other email setup before starting the scan.",
-            technical_details=f"missing {', '.join(missing)}",
+            technical_details=SETUP_DETAIL_MISSING_IMAP_SETUP,
         )
 
-    from .secure_store import get_secret
+    try:
+        from .secure_store import get_secret
 
-    password = get_secret(secret_name)
+        password = get_secret(secret_name)
+    except Exception:
+        return None, UserFacingSetupError(
+            user_message="The saved mail password could not be read. Check your credential store and try again.",
+            technical_details=SETUP_DETAIL_CREDENTIAL_STORE_UNAVAILABLE,
+        )
     if not password:
         return None, UserFacingSetupError(
             user_message="The saved mail password was not found. Check the saved secret name and try again.",
-            technical_details="missing saved secret value for imap_secret_name",
+            technical_details=SETUP_DETAIL_MISSING_SAVED_IMAP_SECRET,
         )
 
     from .email_scanner import ImapEmailScanner, ImapMailboxConfig

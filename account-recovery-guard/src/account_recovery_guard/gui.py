@@ -14,7 +14,7 @@ from .secure_files import plaintext_file_warning
 
 def main() -> int:
     try:
-        from PySide6.QtCore import Qt, QThread, QTimer
+        from PySide6.QtCore import Qt, QThread, QTimer, Slot
         from PySide6.QtGui import QFont
         from PySide6.QtWidgets import (
             QApplication,
@@ -46,7 +46,11 @@ def main() -> int:
     from .gui_services import (
         GuiScanService,
         MailProviderSettings,
+        SETUP_DETAIL_MISSING_PROVIDER,
+        SETUP_DETAIL_MISSING_PROVIDER_INSTANCE,
+        SETUP_DETAIL_SCAN_FAILED,
         build_provider_or_error,
+        controlled_setup_detail_for_log,
         describe_provider_setup,
         scan_progress_stages,
     )
@@ -57,6 +61,8 @@ def main() -> int:
         def __init__(self) -> None:
             super().__init__()
             self.state = GuiAppState.new()
+            self._scan_worker = None
+            self._scan_thread = None
             self.setWindowTitle("Account Recovery Guard")
             self.resize(1180, 760)
             self.setMinimumSize(980, 660)
@@ -214,7 +220,7 @@ def main() -> int:
             if hasattr(self, "setup_error_label"):
                 self.setup_error_label.setVisible(False)
             if self.state.mail_provider is None:
-                self._show_user_error("Choose a mail provider before starting the scan.", "missing provider")
+                self._show_user_error("Choose a mail provider before starting the scan.", SETUP_DETAIL_MISSING_PROVIDER)
                 return
             settings = MailProviderSettings(
                 provider=self.state.mail_provider,
@@ -231,23 +237,33 @@ def main() -> int:
                 self._show_user_error(error.user_message, error.technical_details)
                 return
             if provider is None:
-                self._show_user_error("The mail provider could not be prepared. Check setup and try again.", "missing provider instance")
+                self._show_user_error(
+                    "The mail provider could not be prepared. Check setup and try again.",
+                    SETUP_DETAIL_MISSING_PROVIDER_INSTANCE,
+                )
                 return
             self.state = self.state.start_scan()
             self.stack.setCurrentIndex(2)
             self.scan_stage_label.setText(scan_progress_stages()[0])
-            self._scan_thread = QThread(self)
-            self._scan_worker = ScanWorker(GuiScanService(provider), days_back=settings.days_back)
-            self._scan_worker.moveToThread(self._scan_thread)
-            self._scan_thread.started.connect(self._scan_worker.run)
-            self._scan_worker.progress.connect(self.scan_stage_label.setText)
-            self._scan_worker.finished.connect(self._finish_real_scan)
-            self._scan_worker.failed.connect(self._handle_scan_failure)
-            self._scan_worker.finished.connect(self._scan_thread.quit)
-            self._scan_worker.failed.connect(self._scan_thread.quit)
-            self._scan_thread.finished.connect(self._scan_worker.deleteLater)
-            self._scan_thread.finished.connect(self._scan_thread.deleteLater)
-            self._scan_thread.start()
+            thread = QThread(self)
+            worker = ScanWorker(GuiScanService(provider), days_back=settings.days_back)
+            self._scan_thread = thread
+            self._scan_worker = worker
+            worker.moveToThread(thread)
+            thread.started.connect(worker.run)
+            worker.progress.connect(self.scan_stage_label.setText)
+            worker.finished.connect(self._finish_real_scan)
+            worker.failed.connect(self._handle_scan_failure)
+            worker.finished.connect(worker.release_sensitive_refs)
+            worker.failed.connect(worker.release_sensitive_refs)
+            worker.finished.connect(worker.deleteLater)
+            worker.failed.connect(worker.deleteLater)
+            worker.finished.connect(self._clear_scan_worker_refs)
+            worker.failed.connect(self._clear_scan_worker_refs)
+            worker.finished.connect(thread.quit)
+            worker.failed.connect(thread.quit)
+            thread.finished.connect(thread.deleteLater)
+            thread.start()
 
         def _show_user_error(self, message: str, technical_details: str) -> None:
             if hasattr(self, "setup_error_label"):
@@ -258,19 +274,12 @@ def main() -> int:
                 print(f"Setup check: {controlled_details}", file=sys.stderr)
 
         def _controlled_setup_details(self, technical_details: str) -> str:
-            allowed_tokens = {
-                "client_secret_file",
-                "client_id",
-                "imap_host",
-                "username",
-                "imap_secret_name",
-                "provider",
-                "provider instance",
-                "saved secret value",
-            }
-            if any(token in technical_details for token in allowed_tokens):
-                return technical_details
-            return ""
+            return controlled_setup_detail_for_log(technical_details)
+
+        @Slot()
+        def _clear_scan_worker_refs(self) -> None:
+            self._scan_worker = None
+            self._scan_thread = None
 
         def _finish_real_scan(self, summary: ScanSummary) -> None:
             self.state = self.state.with_scan_summary(summary)
@@ -279,7 +288,7 @@ def main() -> int:
 
         def _handle_scan_failure(self, message: str) -> None:
             self.stack.setCurrentIndex(1)
-            self._show_user_error(message, "scan failed")
+            self._show_user_error(message, SETUP_DETAIL_SCAN_FAILED)
 
         def _advance_placeholder_scan_stage(self) -> None:
             if self._placeholder_scan_stage_index >= len(self._placeholder_scan_stages):

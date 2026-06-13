@@ -1,4 +1,6 @@
 from email.message import EmailMessage
+import sys
+import types
 
 from account_recovery_guard.gui_services import (
     GuiRotationService,
@@ -8,6 +10,7 @@ from account_recovery_guard.gui_services import (
     MailProviderSettings,
     SAFE_SCAN_FAILURE_MESSAGE,
     build_provider_or_error,
+    controlled_setup_detail_for_log,
     describe_provider_setup,
     scan_progress_stages,
 )
@@ -86,6 +89,39 @@ def test_outlook_provider_factory_explains_missing_client_id():
     assert error is not None
     assert "Outlook setup" in error.user_message
     assert "client_id" in error.technical_details
+
+
+def test_setup_detail_logging_requires_exact_internal_code():
+    assert controlled_setup_detail_for_log("missing_client_id") == "missing_client_id"
+    assert controlled_setup_detail_for_log("missing_client_id token=super-secret-value") == ""
+    assert controlled_setup_detail_for_log("backend mentioned client_id but token=super-secret-value") == ""
+
+
+def test_imap_provider_factory_handles_credential_store_exception(monkeypatch):
+    def raise_backend_error(secret_name):
+        raise RuntimeError("backend exploded token=super-secret-value")
+
+    secure_store = types.ModuleType("account_recovery_guard.secure_store")
+    secure_store.get_secret = raise_backend_error
+    monkeypatch.setitem(sys.modules, "account_recovery_guard.secure_store", secure_store)
+
+    provider, error = build_provider_or_error(
+        MailProviderSettings(
+            provider=MailProviderChoice.OTHER_EMAIL,
+            username="you@example.com",
+            imap_host="imap.example.com",
+            imap_secret_name="mail-secret",
+        )
+    )
+
+    assert provider is None
+    assert error is not None
+    assert "saved mail password" in error.user_message
+    assert error.technical_details == "credential_store_unavailable"
+    assert "backend exploded" not in error.user_message
+    assert "super-secret-value" not in error.user_message
+    assert "backend exploded" not in error.technical_details
+    assert "super-secret-value" not in error.technical_details
 
 
 def test_scan_service_returns_guided_summary_from_provider_messages():
