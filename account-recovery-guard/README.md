@@ -2,6 +2,11 @@
 
 Local-first account recovery and password rotation assistant for macOS and Windows.
 
+## Authors
+
+- Antman1526
+- Codex
+
 ## Recommended Approach
 
 Use a single Python 3.11+ codebase with a CLI and a PySide6 desktop GUI. Python gives strong cross-platform parity, stable IMAP support in the standard library, OAuth provider libraries for Gmail/Microsoft Graph, a mature OS credential-store wrapper, and direct subprocess integration with the Bitwarden CLI. The tool intentionally avoids full reset-form automation because password reset pages vary, use MFA/CAPTCHA, and are high-risk if scripted blindly.
@@ -124,7 +129,7 @@ Threat model:
 ## Install: macOS
 
 ```bash
-cd /Users/Antman/Desktop/RPHE_Codex/account-recovery-guard
+cd /Users/Antman/Desktop/AccountRecoveryGuard/account-recovery-guard
 python3 -m venv .venv
 source .venv/bin/activate
 python -m pip install --upgrade pip
@@ -147,7 +152,7 @@ Install NordPass desktop or use the NordPass web vault. Import/export remains ma
 ## Install: Windows PowerShell
 
 ```powershell
-cd $HOME\Desktop\RPHE_Codex\account-recovery-guard
+cd $HOME\Desktop\AccountRecoveryGuard\account-recovery-guard
 py -3.11 -m venv .venv
 .\.venv\Scripts\Activate.ps1
 python -m pip install --upgrade pip
@@ -340,7 +345,7 @@ Signing hooks:
 Create a GitHub Release:
 
 ```bash
-gh workflow run release-account-recovery-guard.yml -R Antman1526/RPHE_Codex -f tag=v0.2.0
+gh workflow run release-account-recovery-guard.yml -R Antman1526/AccountRecoveryGuard -f tag=v0.2.0
 ```
 
 Uninstall:

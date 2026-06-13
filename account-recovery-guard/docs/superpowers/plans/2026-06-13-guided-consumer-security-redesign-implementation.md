@@ -1661,7 +1661,7 @@ Expected:
 After pushing all implementation commits:
 
 ```bash
-gh run list -R Antman1526/RPHE_Codex --workflow build-account-recovery-guard.yml --limit 1
+gh run list -R Antman1526/AccountRecoveryGuard --workflow build-account-recovery-guard.yml --limit 1
 ```
 
 Expected: latest run for the pushed commit appears.
@@ -1669,7 +1669,7 @@ Expected: latest run for the pushed commit appears.
 Watch it:
 
 ```bash
-gh run watch <run-id> -R Antman1526/RPHE_Codex --exit-status
+gh run watch <run-id> -R Antman1526/AccountRecoveryGuard --exit-status
 ```
 
 Expected: test, macOS DMG, and Windows EXE jobs pass.
@@ -1681,7 +1681,7 @@ Run:
 ```bash
 rm -rf dist/github-artifacts-guided-redesign
 mkdir -p dist/github-artifacts-guided-redesign
-gh run download <run-id> -R Antman1526/RPHE_Codex -D dist/github-artifacts-guided-redesign
+gh run download <run-id> -R Antman1526/AccountRecoveryGuard -D dist/github-artifacts-guided-redesign
 ```
 
 Expected:
