@@ -286,6 +286,7 @@ def main() -> int:
         def _finish_real_scan(self, summary: ScanSummary) -> None:
             self.state = self.state.with_scan_summary(summary)
             self._render_results()
+            self._refresh_dashboard()
             self.stack.setCurrentIndex(3)
 
         def _handle_scan_failure(self, message: str) -> None:
@@ -320,6 +321,7 @@ def main() -> int:
         def _continue_to_placeholder_results(self) -> None:
             self.state = self.state.complete_placeholder_scan()
             self._render_results()
+            self._refresh_dashboard()
             self.stack.setCurrentIndex(3)
 
         def _results_page(self) -> QScrollArea:
@@ -421,12 +423,18 @@ def main() -> int:
             self.stack.setCurrentIndex(4)
 
         def _show_results(self) -> None:
+            if self.state.scan_summary is None:
+                self.stack.setCurrentIndex(0)
+                return
             self.state = self.state.show_results()
             self.stack.setCurrentIndex(3)
 
         def _show_dashboard(self) -> None:
-            self.state = self.state.show_dashboard()
+            self._refresh_dashboard()
+            if self.state.scan_summary is not None:
+                self.state = self.state.show_dashboard()
             self.stack.setCurrentIndex(5)
+            self._refresh_dashboard()
 
         def _guided_rotation_placeholder_page(self) -> QScrollArea:
             page, layout = self._wizard_page()
@@ -569,20 +577,63 @@ def main() -> int:
             page, layout = self._wizard_page()
             layout.addWidget(
                 StepHeader(
-                    "Recovery dashboard",
-                    "A calm summary of scan results, rotation progress, and vault sync will live here.",
+                    "Account safety dashboard",
+                    "Review account risk, vault sync, and cleanup tasks.",
+                    "Dashboard",
                 )
             )
-            dashboard = Card("Next actions")
-            for line in (
-                "Connect email and review scan consent.",
-                "Scan locally for account and security messages.",
-                "Rotate one account at a time and keep both vaults aligned.",
-            ):
-                dashboard.body.addWidget(self._body_label(line, "listText"))
-            layout.addWidget(dashboard)
+
+            status = Card("Current status")
+            self.dashboard_summary_label = self._body_label("Connect email and run a scan to begin.", "listText")
+            status.body.addWidget(self.dashboard_summary_label)
+            layout.addWidget(status)
+
+            actions = Card("Actions")
+            action_row = QHBoxLayout()
+            scan = QPushButton("Scan email")
+            scan.setObjectName("primaryButton")
+            scan.setCursor(Qt.CursorShape.PointingHandCursor)
+            scan.clicked.connect(lambda: self.stack.setCurrentIndex(0))
+            vault = QPushButton("Verify vault sync")
+            vault.setObjectName("secondaryButton")
+            vault.setCursor(Qt.CursorShape.PointingHandCursor)
+            vault.clicked.connect(lambda: self.stack.setCurrentIndex(4))
+            advanced = QPushButton("Advanced tools")
+            advanced.setObjectName("secondaryButton")
+            advanced.setCursor(Qt.CursorShape.PointingHandCursor)
+            advanced.clicked.connect(self._show_advanced_tools)
+            action_row.addWidget(scan)
+            action_row.addWidget(vault)
+            action_row.addWidget(advanced)
+            action_row.addStretch(1)
+            actions.body.addLayout(action_row)
+            layout.addWidget(actions)
+
             layout.addStretch(1)
             return page
+
+        def _refresh_dashboard(self) -> None:
+            if not hasattr(self, "dashboard_summary_label"):
+                return
+            summary = self.state.scan_summary
+            if summary is None:
+                self.dashboard_summary_label.setText("Connect email and run a scan to begin.")
+                return
+            vault_text = self.state.vault_status.primary_message
+            cleanup_text = (
+                f" {self.state.vault_status.cleanup_message}"
+                if self.state.vault_status.requires_csv_cleanup
+                else ""
+            )
+            self.dashboard_summary_label.setText(f"{summary.headline}. {summary.attention_text} {vault_text}{cleanup_text}")
+
+        def _show_advanced_tools(self) -> None:
+            if not hasattr(self, "dashboard_summary_label"):
+                return
+            self.dashboard_summary_label.setText(
+                "Advanced tools include IMAP setup, CLI-equivalent commands, export/import utilities, and logs. "
+                "These are available for troubleshooting and should not be needed for the normal guided flow."
+            )
 
         def _sidebar(self) -> QFrame:
             sidebar = QFrame()

@@ -219,13 +219,14 @@ arg gui
 account-recovery-guard-gui
 ```
 
-The GUI opens to a guided recovery dashboard with five sections:
+The GUI opens to a guided first-run flow:
 
-- Dashboard: end-to-end recovery flow and current security boundaries.
-- Scan Mail: copyable Gmail, Outlook/Microsoft Graph, or IMAP scan commands.
-- Rotate: five generated password choices with copy-and-clear clipboard handling.
-- Vault Sync: Bitwarden write and NordPass import/export verification commands.
-- Security: passkey guidance, MFA boundaries, logging rules, and CSV cleanup warnings.
+- Connect Gmail, Outlook, or Other Email.
+- Review scan consent and provider setup before scanning starts.
+- Review recommended accounts found by the scan.
+- Rotate passwords with masked choices and sync vaults.
+
+After a scan exists, the dashboard shows an account safety summary, accounts needing attention, vault sync status, cleanup reminders, and secondary advanced tools for troubleshooting.
 
 Check an email address against Have I Been Pwned:
 
