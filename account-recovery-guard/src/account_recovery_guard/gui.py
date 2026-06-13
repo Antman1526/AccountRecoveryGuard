@@ -42,33 +42,201 @@ def main() -> int:
         print("PySide6 is not installed. Install GUI dependencies with: python -m pip install '.[gui]'", file=sys.stderr)
         return 2
 
+    from .gui_components import Card, ProviderButton, StepHeader, StatusPill
+    from .gui_services import describe_provider_setup
+    from .gui_state import GuiAppState, MailProviderChoice
+
     class MainWindow(QMainWindow):
         def __init__(self) -> None:
             super().__init__()
+            self.state = GuiAppState.new()
             self.setWindowTitle("Account Recovery Guard")
             self.resize(1180, 760)
             self.setMinimumSize(980, 660)
 
             root = QWidget()
-            root_layout = QHBoxLayout(root)
+            root_layout = QVBoxLayout(root)
             root_layout.setContentsMargins(0, 0, 0, 0)
             root_layout.setSpacing(0)
 
             self.stack = QStackedWidget()
             self.nav_group = QButtonGroup(self)
             self.nav_group.setExclusive(True)
-
-            root_layout.addWidget(self._sidebar())
             root_layout.addWidget(self.stack, 1)
             self.setCentralWidget(root)
 
-            self.stack.addWidget(self._home_page())
-            self.stack.addWidget(self._mail_page())
+            self.stack.addWidget(self._connect_email_page())
+            self.stack.addWidget(self._scan_consent_page())
+            self.stack.addWidget(self._scan_progress_page())
+            self.stack.addWidget(self._results_page())
             self.stack.addWidget(self._rotation_page())
-            self.stack.addWidget(self._vault_page())
-            self.stack.addWidget(self._security_page())
-            self.nav_group.button(0).setChecked(True)
+            self.stack.addWidget(self._dashboard_page())
             self.stack.setCurrentIndex(0)
+
+        def _wizard_page(self) -> tuple[QScrollArea, QVBoxLayout]:
+            page = QWidget()
+            layout = QVBoxLayout(page)
+            layout.setContentsMargins(42, 36, 42, 42)
+            layout.setSpacing(18)
+
+            scroll = QScrollArea()
+            scroll.setWidgetResizable(True)
+            scroll.setFrameShape(QFrame.Shape.NoFrame)
+            scroll.setWidget(page)
+            scroll.setObjectName("pageScroll")
+            return scroll, layout
+
+        def _body_label(self, text: str, object_name: str = "cardText") -> QLabel:
+            label = QLabel(text)
+            label.setObjectName(object_name)
+            label.setWordWrap(True)
+            return label
+
+        def _connect_email_page(self) -> QScrollArea:
+            page, layout = self._wizard_page()
+            layout.addWidget(
+                StepHeader(
+                    "Connect email safely",
+                    "Scan account and security emails to find websites tied to you and accounts that may need attention.",
+                    "Step 1 of 3",
+                )
+            )
+
+            trust = Card("Before you connect")
+            for line in (
+                "We scan account, login, password reset, and security alert emails.",
+                "We never log plaintext passwords, OAuth tokens, full email contents, or private keys.",
+                "Classification results and generated recovery data stay local unless you export them.",
+            ):
+                trust.body.addWidget(self._body_label(line, "listText"))
+            layout.addWidget(trust)
+
+            providers = Card("Choose your mail provider")
+            for provider in (MailProviderChoice.GMAIL, MailProviderChoice.OUTLOOK, MailProviderChoice.OTHER_EMAIL):
+                setup = describe_provider_setup(provider)
+                button = ProviderButton(setup.title, setup.description)
+                button.clicked.connect(lambda checked=False, selected=provider: self._select_provider(selected))
+                providers.body.addWidget(button)
+                description = setup.description
+                if setup.technical_details:
+                    description = f"{description} {setup.technical_details}"
+                providers.body.addWidget(self._body_label(description))
+            layout.addWidget(providers)
+            layout.addStretch(1)
+            return page
+
+        def _select_provider(self, provider: MailProviderChoice) -> None:
+            self.state = self.state.with_mail_provider(provider)
+            self.stack.setCurrentIndex(1)
+
+        def _scan_consent_page(self) -> QScrollArea:
+            page, layout = self._wizard_page()
+            layout.addWidget(
+                StepHeader(
+                    "Review scan consent",
+                    "You control when scanning starts.",
+                    "Step 2 of 3",
+                )
+            )
+
+            consent = Card("What happens next")
+            consent.body.addWidget(self._body_label(self.state.consent_summary))
+            layout.addWidget(consent)
+
+            button_row = QHBoxLayout()
+            back = QPushButton("Back")
+            back.setObjectName("secondaryButton")
+            back.setCursor(Qt.CursorShape.PointingHandCursor)
+            back.clicked.connect(lambda: self.stack.setCurrentIndex(0))
+            start = QPushButton("Start scan")
+            start.setObjectName("primaryButton")
+            start.setCursor(Qt.CursorShape.PointingHandCursor)
+            start.clicked.connect(self._start_scan_from_consent)
+            button_row.addWidget(back)
+            button_row.addStretch(1)
+            button_row.addWidget(start)
+            layout.addLayout(button_row)
+            layout.addStretch(1)
+            return page
+
+        def _start_scan_from_consent(self) -> None:
+            self.state = self.state.start_scan()
+            self.stack.setCurrentIndex(2)
+
+        def _scan_progress_page(self) -> QScrollArea:
+            page, layout = self._wizard_page()
+            layout.addWidget(
+                StepHeader(
+                    "Scanning your mailbox",
+                    "Account Recovery Guard is preparing a local scan of account and security messages.",
+                    "Step 3 of 3",
+                )
+            )
+            status_card = Card("Scan status")
+            status_card.body.addWidget(StatusPill("Ready for background scan", "safe"))
+            status_card.body.addWidget(
+                self._body_label(
+                    "The next build step will connect the background scanner. For now, this guided flow confirms your provider and consent before any scan can start."
+                )
+            )
+            layout.addWidget(status_card)
+            next_button = QPushButton("Continue to results")
+            next_button.setObjectName("primaryButton")
+            next_button.setCursor(Qt.CursorShape.PointingHandCursor)
+            next_button.clicked.connect(lambda: self.stack.setCurrentIndex(3))
+            layout.addWidget(next_button, alignment=Qt.AlignmentFlag.AlignRight)
+            layout.addStretch(1)
+            return page
+
+        def _results_page(self) -> QScrollArea:
+            page, layout = self._wizard_page()
+            layout.addWidget(
+                StepHeader(
+                    "Review accounts needing attention",
+                    "Results will appear here after the scanner finishes.",
+                )
+            )
+            empty = Card("No results yet")
+            empty.body.addWidget(
+                self._body_label(
+                    "Task 5 will add live scanning and account findings. This screen is reserved for a clear, prioritized review before you rotate any passwords."
+                )
+            )
+            layout.addWidget(empty)
+            button_row = QHBoxLayout()
+            rotate = QPushButton("Open rotation helper")
+            rotate.setObjectName("secondaryButton")
+            rotate.setCursor(Qt.CursorShape.PointingHandCursor)
+            rotate.clicked.connect(lambda: self.stack.setCurrentIndex(4))
+            dashboard = QPushButton("View dashboard")
+            dashboard.setObjectName("primaryButton")
+            dashboard.setCursor(Qt.CursorShape.PointingHandCursor)
+            dashboard.clicked.connect(lambda: self.stack.setCurrentIndex(5))
+            button_row.addWidget(rotate)
+            button_row.addStretch(1)
+            button_row.addWidget(dashboard)
+            layout.addLayout(button_row)
+            layout.addStretch(1)
+            return page
+
+        def _dashboard_page(self) -> QScrollArea:
+            page, layout = self._wizard_page()
+            layout.addWidget(
+                StepHeader(
+                    "Recovery dashboard",
+                    "A calm summary of scan results, rotation progress, and vault sync will live here.",
+                )
+            )
+            dashboard = Card("Next actions")
+            for line in (
+                "Connect email and review scan consent.",
+                "Scan locally for account and security messages.",
+                "Rotate one account at a time and keep both vaults aligned.",
+            ):
+                dashboard.body.addWidget(self._body_label(line, "listText"))
+            layout.addWidget(dashboard)
+            layout.addStretch(1)
+            return page
 
         def _sidebar(self) -> QFrame:
             sidebar = QFrame()

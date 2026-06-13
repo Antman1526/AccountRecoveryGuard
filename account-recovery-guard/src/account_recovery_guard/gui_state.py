@@ -146,7 +146,19 @@ class GuiAppState:
     def with_mail_provider(self, provider: MailProviderChoice) -> "GuiAppState":
         return replace(self, mail_provider=provider, current_step=GuiStep.SCAN_CONSENT, scan_started=False)
 
+    @property
+    def consent_summary(self) -> str:
+        return (
+            "What we scan: account, login, password reset, and security alert emails that help identify websites tied "
+            "to you and accounts that may need attention.\n\n"
+            "What we protect: we never log plaintext passwords, OAuth tokens, full email contents, or private keys.\n\n"
+            "What stays local: classification results and generated recovery data stay on this computer unless you "
+            "choose to export them."
+        )
+
     def start_scan(self) -> "GuiAppState":
+        if self.mail_provider is None:
+            raise ValueError("Choose a mail provider before starting the scan")
         return replace(self, current_step=GuiStep.SCANNING, scan_started=True)
 
     def with_scan_summary(self, summary: ScanSummary) -> "GuiAppState":

@@ -36,6 +36,27 @@ def test_provider_selection_moves_to_consent_without_scanning():
     assert state.scan_started is False
 
 
+def test_scan_cannot_start_without_provider_selection():
+    state = GuiAppState.new()
+
+    try:
+        state.start_scan()
+    except ValueError as exc:
+        assert "mail provider" in str(exc)
+    else:
+        raise AssertionError("start_scan should require a mail provider")
+
+
+def test_consent_copy_explains_local_scan_boundaries():
+    state = GuiAppState.new().with_mail_provider(MailProviderChoice.OUTLOOK)
+
+    summary = state.consent_summary.lower()
+
+    assert "what we scan" in summary
+    assert "never log" in summary
+    assert "local" in summary
+
+
 def test_scan_summary_recommends_highest_risk_finding():
     finding = CompromisedAccountFinding(
         service_name="Dropbox",
