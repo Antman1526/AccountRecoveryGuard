@@ -597,7 +597,7 @@ def main() -> int:
             vault = QPushButton("Verify vault sync")
             vault.setObjectName("secondaryButton")
             vault.setCursor(Qt.CursorShape.PointingHandCursor)
-            vault.clicked.connect(lambda: self.stack.setCurrentIndex(4))
+            vault.clicked.connect(self._show_vault_sync)
             advanced = QPushButton("Advanced tools")
             advanced.setObjectName("secondaryButton")
             advanced.setCursor(Qt.CursorShape.PointingHandCursor)
@@ -609,6 +609,46 @@ def main() -> int:
             actions.body.addLayout(action_row)
             layout.addWidget(actions)
 
+            self.dashboard_vault_card = Card("Vault sync details")
+            self.dashboard_vault_status_label = self._body_label("", "listText")
+            self.dashboard_vault_limitation_label = self._body_label(
+                "NordPass personal vault updates are staged through CSV import because NordPass does not provide a "
+                "public personal-vault write API.",
+                "listText",
+            )
+            self.dashboard_vault_cleanup_label = self._body_label("", "listText")
+            self.dashboard_vault_card.body.addWidget(self.dashboard_vault_status_label)
+            self.dashboard_vault_card.body.addWidget(self.dashboard_vault_limitation_label)
+            self.dashboard_vault_card.body.addWidget(self.dashboard_vault_cleanup_label)
+            vault_buttons = QHBoxLayout()
+            vault_buttons.addStretch(1)
+            close_vault = QPushButton("Close")
+            close_vault.setObjectName("secondaryButton")
+            close_vault.setCursor(Qt.CursorShape.PointingHandCursor)
+            close_vault.clicked.connect(self._hide_dashboard_details)
+            vault_buttons.addWidget(close_vault)
+            self.dashboard_vault_card.body.addLayout(vault_buttons)
+            self.dashboard_vault_card.setVisible(False)
+            layout.addWidget(self.dashboard_vault_card)
+
+            self.dashboard_advanced_card = Card("Advanced troubleshooting")
+            for line in (
+                "Use advanced tools only when the guided flow cannot connect, scan, or verify normally.",
+                "Check mail provider setup, local exports, import files, and application logs before retrying.",
+                "Command-preview utilities remain secondary troubleshooting aids; the guided flow should be the normal path.",
+            ):
+                self.dashboard_advanced_card.body.addWidget(self._body_label(line, "listText"))
+            advanced_buttons = QHBoxLayout()
+            advanced_buttons.addStretch(1)
+            close_advanced = QPushButton("Close")
+            close_advanced.setObjectName("secondaryButton")
+            close_advanced.setCursor(Qt.CursorShape.PointingHandCursor)
+            close_advanced.clicked.connect(self._hide_dashboard_details)
+            advanced_buttons.addWidget(close_advanced)
+            self.dashboard_advanced_card.body.addLayout(advanced_buttons)
+            self.dashboard_advanced_card.setVisible(False)
+            layout.addWidget(self.dashboard_advanced_card)
+
             layout.addStretch(1)
             return page
 
@@ -618,6 +658,9 @@ def main() -> int:
             summary = self.state.scan_summary
             if summary is None:
                 self.dashboard_summary_label.setText("Connect email and run a scan to begin.")
+                if hasattr(self, "dashboard_vault_status_label"):
+                    self.dashboard_vault_status_label.setText("Run a scan before verifying vault sync.")
+                    self.dashboard_vault_cleanup_label.setText("No staged NordPass CSV cleanup is pending.")
                 return
             vault_text = self.state.vault_status.primary_message
             cleanup_text = (
@@ -626,14 +669,33 @@ def main() -> int:
                 else ""
             )
             self.dashboard_summary_label.setText(f"{summary.headline}. {summary.attention_text} {vault_text}{cleanup_text}")
+            if hasattr(self, "dashboard_vault_status_label"):
+                self.dashboard_vault_status_label.setText(f"Bitwarden status: {vault_text}")
+                self.dashboard_vault_cleanup_label.setText(
+                    self.state.vault_status.cleanup_message
+                    if self.state.vault_status.requires_csv_cleanup
+                    else "No staged NordPass CSV cleanup is pending."
+                )
+
+        def _show_vault_sync(self) -> None:
+            self._refresh_dashboard()
+            if hasattr(self, "dashboard_advanced_card"):
+                self.dashboard_advanced_card.setVisible(False)
+            if hasattr(self, "dashboard_vault_card"):
+                self.dashboard_vault_card.setVisible(True)
 
         def _show_advanced_tools(self) -> None:
-            if not hasattr(self, "dashboard_summary_label"):
-                return
-            self.dashboard_summary_label.setText(
-                "Advanced tools include IMAP setup, CLI-equivalent commands, export/import utilities, and logs. "
-                "These are available for troubleshooting and should not be needed for the normal guided flow."
-            )
+            self._refresh_dashboard()
+            if hasattr(self, "dashboard_vault_card"):
+                self.dashboard_vault_card.setVisible(False)
+            if hasattr(self, "dashboard_advanced_card"):
+                self.dashboard_advanced_card.setVisible(True)
+
+        def _hide_dashboard_details(self) -> None:
+            if hasattr(self, "dashboard_vault_card"):
+                self.dashboard_vault_card.setVisible(False)
+            if hasattr(self, "dashboard_advanced_card"):
+                self.dashboard_advanced_card.setVisible(False)
 
         def _sidebar(self) -> QFrame:
             sidebar = QFrame()
