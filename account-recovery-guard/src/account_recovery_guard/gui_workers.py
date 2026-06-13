@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from PySide6.QtCore import QObject, Signal, Slot
 
-from .gui_services import GuiScanService, scan_progress_stages
+from .gui_services import GuiScanService, sanitize_scan_error, scan_progress_stages
 
 
 class ScanWorker(QObject):
@@ -22,6 +22,6 @@ class ScanWorker(QObject):
                 self.progress.emit(stage)
             summary = self.service.scan(self.days_back)
         except Exception as exc:
-            self.failed.emit(str(exc))
+            self.failed.emit(sanitize_scan_error(str(exc)))
             return
         self.finished.emit(summary)

@@ -172,6 +172,11 @@ class GuiAppState:
             raise ValueError("A scan summary is required before returning to results")
         return replace(self, current_step=GuiStep.RESULTS)
 
+    def show_account_review(self, account: AccountReview) -> "GuiAppState":
+        if self.scan_summary is None:
+            raise ValueError("Review scan results before opening an account review")
+        return replace(self, current_step=GuiStep.ACCOUNT_REVIEW, selected_account=account)
+
     def show_guided_rotation_placeholder(self) -> "GuiAppState":
         if self.scan_summary is None:
             raise ValueError("Review scan results before opening password guidance")

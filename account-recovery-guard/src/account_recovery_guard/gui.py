@@ -14,7 +14,7 @@ from .secure_files import plaintext_file_warning
 
 def main() -> int:
     try:
-        from PySide6.QtCore import Qt
+        from PySide6.QtCore import Qt, QTimer
         from PySide6.QtGui import QFont
         from PySide6.QtWidgets import (
             QApplication,
@@ -162,9 +162,17 @@ def main() -> int:
         def _start_scan_from_consent(self) -> None:
             self.state = self.state.start_scan()
             self.stack.setCurrentIndex(2)
-            for stage in scan_progress_stages():
-                self.scan_stage_label.setText(stage)
-            self._continue_to_placeholder_results()
+            self._placeholder_scan_stages = scan_progress_stages()
+            self._placeholder_scan_stage_index = 0
+            self._advance_placeholder_scan_stage()
+
+        def _advance_placeholder_scan_stage(self) -> None:
+            if self._placeholder_scan_stage_index >= len(self._placeholder_scan_stages):
+                self._continue_to_placeholder_results()
+                return
+            self.scan_stage_label.setText(self._placeholder_scan_stages[self._placeholder_scan_stage_index])
+            self._placeholder_scan_stage_index += 1
+            QTimer.singleShot(450, self._advance_placeholder_scan_stage)
 
         def _scan_progress_page(self) -> QScrollArea:
             page, layout = self._wizard_page()
@@ -215,9 +223,10 @@ def main() -> int:
             review.setObjectName("primaryButton")
             review.setCursor(Qt.CursorShape.PointingHandCursor)
             review.clicked.connect(lambda checked=False, selected=account: self._show_account_review_placeholder(selected))
-            all_accounts = QPushButton("View all accounts")
+            all_accounts = QPushButton("All accounts list available after real scan")
             all_accounts.setObjectName("secondaryButton")
-            all_accounts.setCursor(Qt.CursorShape.PointingHandCursor)
+            all_accounts.setEnabled(False)
+            all_accounts.setToolTip("The all-accounts list will be available when real scan providers are connected.")
             button_row.addWidget(review)
             button_row.addWidget(all_accounts)
             button_row.addStretch(1)
@@ -275,8 +284,8 @@ def main() -> int:
                     self._clear_layout(child_layout)
 
         def _show_account_review_placeholder(self, account: AccountReview) -> None:
-            self.selected_account = account
-            self._show_guided_rotation_placeholder()
+            self.state = self.state.show_account_review(account)
+            self.stack.setCurrentIndex(4)
 
         def _show_guided_rotation_placeholder(self) -> None:
             self.state = self.state.show_guided_rotation_placeholder()

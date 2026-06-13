@@ -127,16 +127,35 @@ class GuiVaultService:
         )
 
 
-_SECRET_PATTERNS = (
+_SECRET_VALUE_PATTERNS = (
     re.compile(r"(?i)\b(token|secret|password|session|api[_-]?key|access[_-]?token|refresh[_-]?token)=\S+"),
+    re.compile(r"(?i)\b(refresh-token|access-token|client[_-]secret)=\S+"),
     re.compile(r"(?i)\b(bw_session)=\S+"),
+)
+
+_SECRET_COLON_PATTERNS = (
+    re.compile(
+        r"(?i)(['\"]?\b(?:token|secret|password|session|api[_-]?key|access[_-]?token|"
+        r"refresh[_-]?token|client[_-]secret)\b['\"]?\s*:\s*)['\"][^'\"]+['\"]"
+    ),
 )
 
 
 def _sanitize_vault_message(message: str) -> str:
+    return _sanitize_secret_message(message)
+
+
+def sanitize_scan_error(message: str) -> str:
+    sanitized = _sanitize_secret_message(message)
+    return sanitized or "Scan failed. Check your provider connection and try again."
+
+
+def _sanitize_secret_message(message: str) -> str:
     sanitized = message.strip()
-    for pattern in _SECRET_PATTERNS:
+    for pattern in _SECRET_VALUE_PATTERNS:
         sanitized = pattern.sub(lambda match: f"{match.group(1)}=<redacted>", sanitized)
+    for pattern in _SECRET_COLON_PATTERNS:
+        sanitized = pattern.sub(lambda match: f"{match.group(1)}<redacted>", sanitized)
     return sanitized
 
 

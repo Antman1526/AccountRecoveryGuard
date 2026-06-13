@@ -145,6 +145,18 @@ def test_results_and_rotation_transitions_keep_summary_available():
     assert rotation.scan_summary == summary
 
 
+def test_account_review_transition_records_selected_account():
+    summary = ScanSummary.from_findings([], discovered_count=0)
+    account = AccountReview.from_finding_stub("Dropbox", "me@example.com")
+    state = GuiAppState.new().with_mail_provider(MailProviderChoice.GMAIL).with_scan_summary(summary)
+
+    review = state.show_account_review(account)
+
+    assert review.current_step == GuiStep.ACCOUNT_REVIEW
+    assert review.selected_account == account
+    assert review.scan_summary == summary
+
+
 def test_rotation_session_selects_one_password_without_revealing_all():
     candidates = _password_candidates()
     session = RotationSession(account=AccountReview.from_finding_stub("Dropbox", "me@example.com"), choices=candidates)
