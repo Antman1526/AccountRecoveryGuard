@@ -848,14 +848,6 @@ def main() -> int:
                     )
                 result.setText("Five choices generated. Select one, complete the reset page, then copy the selected password.")
 
-            def reveal_selected() -> None:
-                generated = getattr(choices, "generated", [])
-                index = choices.currentRow()
-                if index < 0 or index >= len(generated):
-                    result.setText("Select one generated password first.")
-                    return
-                result.setText(generated[index].password)
-
             def copy_password() -> None:
                 generated = getattr(choices, "generated", [])
                 index = choices.currentRow()
@@ -882,13 +874,9 @@ def main() -> int:
             copy_button = QPushButton("Copy selected password")
             copy_button.setObjectName("primaryButton")
             copy_button.clicked.connect(copy_password)
-            reveal_button = QPushButton("Reveal selected")
-            reveal_button.setObjectName("secondaryButton")
-            reveal_button.clicked.connect(reveal_selected)
             button_row = QHBoxLayout()
             button_row.addWidget(generate_button)
             button_row.addWidget(copy_button)
-            button_row.addWidget(reveal_button)
             button_row.addStretch(1)
             form.addLayout(button_row, 6, 1)
             form.addWidget(QLabel("Password choices"), 7, 0)
