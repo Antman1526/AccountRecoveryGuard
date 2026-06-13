@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from dataclasses import dataclass, replace
+from dataclasses import dataclass, field, replace
 from enum import StrEnum
 
 from .models import CompromisedAccountFinding, PasswordCandidate, RotationChoiceSummary
@@ -81,8 +81,11 @@ class ScanSummary:
 @dataclass(frozen=True)
 class RotationSession:
     account: AccountReview
-    choices: list[PasswordCandidate]
+    choices: tuple[PasswordCandidate, ...] | list[PasswordCandidate] = field(repr=False)
     selected_index: int | None = None
+
+    def __post_init__(self) -> None:
+        object.__setattr__(self, "choices", tuple(self.choices))
 
     def select_choice(self, index: int) -> "RotationSession":
         if index < 1 or index > len(self.choices):
@@ -129,7 +132,7 @@ class GuiAppState:
     scan_started: bool = False
     scan_summary: ScanSummary | None = None
     selected_account: AccountReview | None = None
-    rotation_session: RotationSession | None = None
+    rotation_session: RotationSession | None = field(default=None, repr=False)
     vault_status: VaultSyncStatus = VaultSyncStatus()
 
     @classmethod

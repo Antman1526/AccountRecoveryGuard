@@ -3,12 +3,20 @@ from datetime import UTC, datetime
 from account_recovery_guard.gui_state import (
     AccountReview,
     GuiAppState,
+    GuiStep,
     MailProviderChoice,
     RotationSession,
     ScanSummary,
     VaultSyncStatus,
 )
 from account_recovery_guard.models import CompromisedAccountFinding, PasswordCandidate
+
+
+def _password_candidates() -> list[PasswordCandidate]:
+    return [
+        PasswordCandidate("Dropbox", "me@example.com", "https://dropbox.com", "Aa1!" * 8, "note"),
+        PasswordCandidate("Dropbox", "me@example.com", "https://dropbox.com", "Bb2@" * 8, "note"),
+    ]
 
 
 def test_new_app_starts_in_email_connection_step():
@@ -49,17 +57,44 @@ def test_scan_summary_recommends_highest_risk_finding():
 
 
 def test_rotation_session_selects_one_password_without_revealing_all():
-    candidates = [
-        PasswordCandidate("Dropbox", "me@example.com", "https://dropbox.com", "Aa1!" * 8, "note"),
-        PasswordCandidate("Dropbox", "me@example.com", "https://dropbox.com", "Bb2@" * 8, "note"),
-    ]
+    candidates = _password_candidates()
     session = RotationSession(account=AccountReview.from_finding_stub("Dropbox", "me@example.com"), choices=candidates)
 
     selected = session.select_choice(2)
 
     assert selected.selected_index == 2
     assert selected.selected_candidate.password == "Bb2@" * 8
-    assert all("Bb2@" not in row.display for row in selected.choice_summaries)
+    for candidate in candidates:
+        assert all(candidate.password not in row.display for row in selected.choice_summaries)
+
+
+def test_rotation_session_repr_does_not_reveal_candidate_passwords():
+    candidates = _password_candidates()
+    session = RotationSession(account=AccountReview.from_finding_stub("Dropbox", "me@example.com"), choices=candidates)
+
+    session_repr = repr(session)
+
+    assert all(candidate.password not in session_repr for candidate in candidates)
+
+
+def test_app_state_repr_does_not_reveal_rotation_passwords():
+    candidates = _password_candidates()
+    session = RotationSession(account=AccountReview.from_finding_stub("Dropbox", "me@example.com"), choices=candidates)
+    state = GuiAppState(current_step=GuiStep.ROTATION, rotation_session=session)
+
+    state_repr = repr(state)
+
+    assert all(candidate.password not in state_repr for candidate in candidates)
+
+
+def test_rotation_session_stores_choices_immutably():
+    candidates = _password_candidates()
+    session = RotationSession(account=AccountReview.from_finding_stub("Dropbox", "me@example.com"), choices=candidates)
+
+    candidates.append(PasswordCandidate("GitHub", "me@example.com", "https://github.com", "Cc3#" * 8, "note"))
+
+    assert isinstance(session.choices, tuple)
+    assert len(session.choices) == 2
 
 
 def test_vault_sync_status_guides_nordpass_import_honestly():
