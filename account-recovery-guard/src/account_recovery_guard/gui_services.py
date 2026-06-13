@@ -18,6 +18,9 @@ class MailProvider(Protocol):
         ...
 
 
+SAFE_SCAN_FAILURE_MESSAGE = "The scan could not finish. Check your provider setup and try again."
+
+
 @dataclass(frozen=True)
 class ProviderSetupCopy:
     title: str
@@ -143,11 +146,6 @@ _SECRET_COLON_PATTERNS = (
 
 def _sanitize_vault_message(message: str) -> str:
     return _sanitize_secret_message(message)
-
-
-def sanitize_scan_error(message: str) -> str:
-    sanitized = _sanitize_secret_message(message)
-    return sanitized or "Scan failed. Check your provider connection and try again."
 
 
 def _sanitize_secret_message(message: str) -> str:

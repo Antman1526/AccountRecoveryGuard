@@ -5,9 +5,9 @@ from account_recovery_guard.gui_services import (
     GuiScanService,
     GuiVaultService,
     GuiVaultWriteResult,
+    SAFE_SCAN_FAILURE_MESSAGE,
     describe_provider_setup,
     scan_progress_stages,
-    sanitize_scan_error,
 )
 from account_recovery_guard.gui_state import MailProviderChoice
 from account_recovery_guard.models import DiscoveredAccount, PasswordCandidate
@@ -87,22 +87,17 @@ def test_scan_service_counts_unique_discovered_and_risky_services():
     assert summary.total_accounts_found == 2
 
 
-def test_scan_error_sanitizer_redacts_provider_credentials():
-    message = (
-        "Graph failed: access_token=ya29.secret password=hunter2 "
-        "refresh-token=refresh.secret client_secret=client.secret "
-        "{'api_key': 'json.secret'}"
-    )
+def test_scan_failure_message_is_generic_for_user_display():
+    unsafe_examples = [
+        "Authorization: Bearer ya29.secret-token",
+        "app password hunter2",
+    ]
 
-    sanitized = sanitize_scan_error(message)
-
-    assert "ya29.secret" not in sanitized
-    assert "hunter2" not in sanitized
-    assert "refresh.secret" not in sanitized
-    assert "client.secret" not in sanitized
-    assert "json.secret" not in sanitized
-    assert "access_token=<redacted>" in sanitized
-    assert "password=<redacted>" in sanitized
+    assert SAFE_SCAN_FAILURE_MESSAGE == "The scan could not finish. Check your provider setup and try again."
+    for unsafe_example in unsafe_examples:
+        assert unsafe_example not in SAFE_SCAN_FAILURE_MESSAGE
+    assert "ya29.secret-token" not in SAFE_SCAN_FAILURE_MESSAGE
+    assert "hunter2" not in SAFE_SCAN_FAILURE_MESSAGE
 
 
 def test_rotation_service_builds_five_choices_for_account():
