@@ -109,6 +109,8 @@ def validate_browser_reset_link(reset_link: str, expected_domain_or_url: str | N
         raise ResetLinkSafetyError("Reset links opened by the browser helper must use HTTPS.")
     if parsed.username or parsed.password:
         raise ResetLinkSafetyError("Reset links opened by the browser helper cannot include embedded credentials.")
+    if is_blocked_recovery_download_url(reset_link):
+        raise ResetLinkSafetyError("Recovery browser links cannot point directly to installers, archives, or scripts.")
     if expected_domain_or_url and not safe_reset_link_matches_domain(reset_link, expected_domain_or_url):
         raise ResetLinkSafetyError("Reset link failed domain or redirect safety checks.")
     return reset_link

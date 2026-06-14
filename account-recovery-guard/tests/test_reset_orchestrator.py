@@ -69,6 +69,20 @@ def test_browser_reset_link_validation_rejects_unsafe_redirect():
         )
 
 
+@pytest.mark.parametrize(
+    "url",
+    (
+        "https://example.com/security-update.exe",
+        "https://example.com/recovery/reset-kit.zip?token=abc",
+        "https://example.com/account/password-reset.dmg",
+        "https://example.com/scripts/recover-account.ps1",
+    ),
+)
+def test_browser_reset_link_validation_rejects_direct_download_urls(url):
+    with pytest.raises(ResetLinkSafetyError):
+        validate_browser_reset_link(url, "example.com")
+
+
 def test_recovery_browser_blocks_common_malware_download_urls():
     assert is_blocked_recovery_download_url("https://example.com/download/security-update.exe") is True
     assert is_blocked_recovery_download_url("https://example.com/files/recovery%20tool.pkg") is True
