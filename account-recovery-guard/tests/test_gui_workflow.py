@@ -39,6 +39,7 @@ def test_password_exposure_prompt_explains_free_safe_boundary():
     assert "free hibp" in text
     assert "k-anonymous" in text
     assert "never logged" in text
+    assert "do not check a new generated password" in text
     assert "whole web" in text
     assert "dark-web" in text
     assert "private forums" in text

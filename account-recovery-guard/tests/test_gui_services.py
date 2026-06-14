@@ -329,7 +329,7 @@ def test_rotation_service_builds_five_choices_for_account():
 
 def test_password_exposure_service_reports_found_without_revealing_password():
     checker = FakePwnedPasswordChecker(count=12)
-    result = GuiPasswordExposureService(checker=checker).check_password("hunter2")
+    result = GuiPasswordExposureService(checker=checker).check_password("hunter2", confirmed_old_or_reused=True)
 
     assert checker.seen_password == "hunter2"
     assert result.count == 12
@@ -340,7 +340,10 @@ def test_password_exposure_service_reports_found_without_revealing_password():
 
 
 def test_password_exposure_service_reports_not_found():
-    result = GuiPasswordExposureService(checker=FakePwnedPasswordChecker(count=0)).check_password("unique-password")
+    result = GuiPasswordExposureService(checker=FakePwnedPasswordChecker(count=0)).check_password(
+        "unique-password",
+        confirmed_old_or_reused=True,
+    )
 
     assert result.count == 0
     assert result.rotation_recommended is False
@@ -350,7 +353,10 @@ def test_password_exposure_service_reports_not_found():
 
 def test_password_exposure_service_handles_empty_and_failure_without_secret_echo():
     empty = GuiPasswordExposureService(checker=FakePwnedPasswordChecker(count=0)).check_password("")
-    failure = GuiPasswordExposureService(checker=FakePwnedPasswordChecker(failure=True)).check_password("hunter2")
+    failure = GuiPasswordExposureService(checker=FakePwnedPasswordChecker(failure=True)).check_password(
+        "hunter2",
+        confirmed_old_or_reused=True,
+    )
 
     assert empty.count is None
     assert "Enter a password" in empty.user_message
@@ -358,6 +364,18 @@ def test_password_exposure_service_handles_empty_and_failure_without_secret_echo
     assert failure.technical_details == "pwned_password_check_failed"
     assert "hunter2" not in failure.user_message
     assert "hunter2" not in failure.technical_details
+
+
+def test_password_exposure_service_requires_old_or_reused_confirmation_before_network_call():
+    checker = FakePwnedPasswordChecker(count=12)
+
+    result = GuiPasswordExposureService(checker=checker).check_password("new-generated-password")
+
+    assert checker.seen_password is None
+    assert result.count is None
+    assert result.technical_details == "password_exposure_confirmation_required"
+    assert "old or reused password" in result.user_message
+    assert "new-generated-password" not in result.user_message
 
 
 def test_vault_service_reports_not_configured_without_cli_call():

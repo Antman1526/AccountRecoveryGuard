@@ -73,7 +73,8 @@ def suggested_next_actions() -> list[str]:
 
 def password_exposure_prompt_lines(count: int | None = None) -> list[str]:
     lines = [
-        "Check a password you may have reused. The app uses the free HIBP k-anonymous range check.",
+        "Check an old password you may have reused. The app uses the free HIBP k-anonymous range check.",
+        "Do not check a new generated password; save new passwords directly in your vaults.",
         "The plaintext password is cleared from the field and is never logged; only a hash prefix is sent.",
         "This does not search the whole web, dark-web dumps, private forums, or unsafe paste sites.",
     ]

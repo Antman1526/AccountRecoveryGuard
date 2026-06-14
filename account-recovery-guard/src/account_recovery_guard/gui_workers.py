@@ -36,10 +36,11 @@ class ScanWorker(QObject):
 class PasswordExposureWorker(QObject):
     finished = Signal(object)
 
-    def __init__(self, service: GuiPasswordExposureService, password: str) -> None:
+    def __init__(self, service: GuiPasswordExposureService, password: str, confirmed_old_or_reused: bool = False) -> None:
         super().__init__()
         self.service: GuiPasswordExposureService | None = service
         self.password: str | None = password
+        self.confirmed_old_or_reused = confirmed_old_or_reused
 
     @Slot()
     def run(self) -> None:
@@ -49,7 +50,7 @@ class PasswordExposureWorker(QObject):
         if service is None:
             self.finished.emit(GuiPasswordExposureService().check_password(""))
             return
-        self.finished.emit(service.check_password(password))
+        self.finished.emit(service.check_password(password, self.confirmed_old_or_reused))
 
     @Slot()
     def release_sensitive_refs(self) -> None:

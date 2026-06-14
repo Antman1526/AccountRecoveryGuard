@@ -1014,6 +1014,8 @@ def main() -> int:
             password_input = QLineEdit("")
             password_input.setEchoMode(QLineEdit.EchoMode.Password)
             password_input.setPlaceholderText("Type password, then check")
+            old_or_reused = QCheckBox("This is an old or reused password, not a new generated password")
+            old_or_reused.setCursor(Qt.CursorShape.PointingHandCursor)
             status = self._body_label(
                 self.state.password_exposure_rotation_guidance
                 or "Ready for the free HIBP k-anonymous password check.",
@@ -1027,13 +1029,14 @@ def main() -> int:
             check_button.setCursor(Qt.CursorShape.PointingHandCursor)
             check_button.clicked.connect(
                 lambda checked=False, field=password_input, label=status, button=check_button: self._run_password_exposure_check(
-                    field, label, button
+                    field, label, button, old_or_reused
                 )
             )
             form.addWidget(QLabel("Password"), 0, 0)
             form.addWidget(password_input, 0, 1)
-            form.addWidget(status, 1, 0, 1, 2)
-            form.addWidget(check_button, 2, 1, alignment=Qt.AlignmentFlag.AlignRight)
+            form.addWidget(old_or_reused, 1, 1)
+            form.addWidget(status, 2, 0, 1, 2)
+            form.addWidget(check_button, 3, 1, alignment=Qt.AlignmentFlag.AlignRight)
             card.body.addLayout(form)
             return card
 
@@ -1479,6 +1482,10 @@ def main() -> int:
             self.password_exposure_input = QLineEdit("")
             self.password_exposure_input.setEchoMode(QLineEdit.EchoMode.Password)
             self.password_exposure_input.setPlaceholderText("Type password, then check")
+            self.password_exposure_confirmation = QCheckBox(
+                "This is an old or reused password, not a new generated password"
+            )
+            self.password_exposure_confirmation.setCursor(Qt.CursorShape.PointingHandCursor)
             self.password_exposure_status = self._body_label(
                 "Uses the free HIBP k-anonymous range check. The password is cleared after the check.",
                 "listText",
@@ -1492,12 +1499,14 @@ def main() -> int:
                     self.password_exposure_input,
                     self.password_exposure_status,
                     self.password_exposure_button,
+                    self.password_exposure_confirmation,
                 )
             )
             password_check_layout.addWidget(QLabel("Password"), 0, 0)
             password_check_layout.addWidget(self.password_exposure_input, 0, 1)
-            password_check_layout.addWidget(self.password_exposure_status, 1, 0, 1, 2)
-            password_check_layout.addWidget(password_check, 2, 1, alignment=Qt.AlignmentFlag.AlignRight)
+            password_check_layout.addWidget(self.password_exposure_confirmation, 1, 1)
+            password_check_layout.addWidget(self.password_exposure_status, 2, 0, 1, 2)
+            password_check_layout.addWidget(password_check, 3, 1, alignment=Qt.AlignmentFlag.AlignRight)
             layout.addWidget(password_check_box)
 
             exposure_box = QGroupBox("Safe exposure plan")
@@ -1568,17 +1577,22 @@ def main() -> int:
             layout.addWidget(csv_warning)
             return page
 
-        def _run_password_exposure_check(self, password_input=None, status_label=None, action_button=None) -> None:
+        def _run_password_exposure_check(self, password_input=None, status_label=None, action_button=None, confirmation=None) -> None:
             if password_input is None:
                 password_input = getattr(self, "password_exposure_input", None)
             if status_label is None:
                 status_label = getattr(self, "password_exposure_status", None)
             if action_button is None:
                 action_button = getattr(self, "password_exposure_button", None)
+            if confirmation is None:
+                confirmation = getattr(self, "password_exposure_confirmation", None)
             if password_input is None:
                 return
             password = password_input.text()
             password_input.clear()
+            confirmed_old_or_reused = bool(confirmation is not None and confirmation.isChecked())
+            if confirmation is not None:
+                confirmation.setChecked(False)
             self._active_password_exposure_status = status_label
             self._active_password_exposure_button = action_button
             if status_label is not None:
@@ -1586,7 +1600,7 @@ def main() -> int:
             if action_button is not None:
                 action_button.setEnabled(False)
             thread = QThread(self)
-            worker = PasswordExposureWorker(GuiPasswordExposureService(), password)
+            worker = PasswordExposureWorker(GuiPasswordExposureService(), password, confirmed_old_or_reused)
             self._password_exposure_thread = thread
             self._password_exposure_worker = worker
             worker.moveToThread(thread)

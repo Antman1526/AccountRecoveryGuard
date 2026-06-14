@@ -410,11 +410,20 @@ class GuiPasswordExposureService:
     def __init__(self, checker: HibpBreachChecker | None = None) -> None:
         self.checker = checker or HibpBreachChecker()
 
-    def check_password(self, password: str) -> GuiPasswordExposureResult:
+    def check_password(self, password: str, confirmed_old_or_reused: bool = False) -> GuiPasswordExposureResult:
         if not password:
             return GuiPasswordExposureResult(
                 count=None,
                 user_message="Enter a password to check. It will be cleared after the check.",
+            )
+        if not confirmed_old_or_reused:
+            return GuiPasswordExposureResult(
+                count=None,
+                user_message=(
+                    "Only check an old or reused password. Do not check a new generated password; save new "
+                    "passwords directly in your vaults."
+                ),
+                technical_details="password_exposure_confirmation_required",
             )
         try:
             count = self.checker.pwned_password_count(password)
