@@ -21,14 +21,14 @@ class BreachCheckError(RuntimeError):
 class HibpBreachChecker:
     base_url = "https://haveibeenpwned.com/api/v3"
 
-    def __init__(self, api_key: str, user_agent: str = "account-recovery-guard/0.1", delay_seconds: float = 1.6):
-        if not api_key:
-            raise ValueError("HIBP API key is required for breached account checks")
+    def __init__(self, api_key: str | None = None, user_agent: str = "account-recovery-guard/0.1", delay_seconds: float = 1.6):
         self.api_key = api_key
         self.user_agent = user_agent
         self.delay_seconds = delay_seconds
 
     def breaches_for_account(self, email_address: str) -> list[HibpBreach]:
+        if not self.api_key:
+            raise ValueError("HIBP API key is required for breached account checks")
         url = f"{self.base_url}/breachedaccount/{quote(email_address, safe='')}?truncateResponse=true"
         request = Request(
             url,

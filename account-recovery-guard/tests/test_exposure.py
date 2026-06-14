@@ -67,3 +67,17 @@ def test_exposure_boundary_blocks_unsafe_whole_web_claims():
     assert "does not crawl" in report.safety_boundary
     assert "dark-web" in report.safety_boundary
     assert "plaintext passwords" in report.safety_boundary
+
+
+def test_exposure_report_tracks_skipped_paid_email_breach_lookup():
+    report = build_exposure_report(
+        "me@example.com",
+        [],
+        [],
+        [],
+        password_pwned_count=0,
+        email_breach_lookup_status="not_run",
+    )
+
+    assert report.breach_count == 0
+    assert report.email_breach_lookup_status == "not_run"

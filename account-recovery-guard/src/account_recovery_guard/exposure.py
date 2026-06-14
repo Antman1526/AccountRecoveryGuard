@@ -26,6 +26,7 @@ class ExposureRecommendation:
 class ExposureReport:
     email_address: str
     breach_count: int
+    email_breach_lookup_status: str
     password_pwned_count: int | None
     recommendations: tuple[ExposureRecommendation, ...]
     safety_boundary: str = SAFE_EXPOSURE_BOUNDARY
@@ -41,6 +42,7 @@ def build_exposure_report(
     discovered_accounts: list[DiscoveredAccount],
     findings: list[CompromisedAccountFinding],
     password_pwned_count: int | None = None,
+    email_breach_lookup_status: str = "checked",
 ) -> ExposureReport:
     service_rows: dict[str, dict[str, object]] = {}
 
@@ -126,6 +128,7 @@ def build_exposure_report(
     return ExposureReport(
         email_address=email_address,
         breach_count=len(breaches),
+        email_breach_lookup_status=email_breach_lookup_status,
         password_pwned_count=password_pwned_count,
         recommendations=tuple(recommendations),
     )

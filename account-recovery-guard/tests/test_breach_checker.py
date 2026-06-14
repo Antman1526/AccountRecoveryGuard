@@ -17,3 +17,12 @@ def test_breach_checker_treats_404_as_no_breach(monkeypatch):
     monkeypatch.setattr("account_recovery_guard.breach_checker.urlopen", fake_open)
 
     assert HibpBreachChecker("api-key").breaches_for_account("me@example.com") == []
+
+
+def test_breach_lookup_requires_api_key():
+    try:
+        HibpBreachChecker().breaches_for_account("me@example.com")
+    except ValueError as exc:
+        assert "API key" in str(exc)
+    else:
+        raise AssertionError("breach lookup without API key should fail closed")

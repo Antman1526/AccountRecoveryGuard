@@ -1106,13 +1106,34 @@ def main() -> int:
             limit_cards = (
                 ("Passkeys", "Store passkeys in your phone or OS account where the service supports it; do not export them through this app."),
                 ("MFA", "The app can open reset links, but you complete MFA challenges yourself."),
-                ("Exposure intelligence", "Use authorized mailbox evidence and HIBP checks; do not crawl hostile password dumps."),
+                ("Exposure intelligence", "Use authorized mailbox evidence and the free HIBP password check; paid HIBP email-breach lookup is optional."),
                 ("NordPass", "Personal-vault writes are staged as CSV because NordPass does not provide a public personal-vault CRUD API."),
                 ("Logs", "Audit events record actions and counts, never plaintext passwords or token values."),
             )
             for index, (title, body) in enumerate(limit_cards):
                 limits.addWidget(self._card(title, body, "guardrail"), index // 2, index % 2)
             layout.addLayout(limits)
+
+            readiness_box = QGroupBox("Free setup readiness")
+            readiness_box.setObjectName("group")
+            readiness_layout = QGridLayout(readiness_box)
+            readiness_preview = self._command_box()
+            readiness_preview.setText(build_command_preview("setup-check", {"json": True}))
+            readiness_note = QLabel(
+                "Checks local free setup first, then labels paid-only steps like Apple notarization, Windows code signing, and optional HIBP email-breach lookup."
+            )
+            readiness_note.setObjectName("listText")
+            readiness_note.setWordWrap(True)
+            readiness_layout.addWidget(readiness_note, 0, 0, 1, 2)
+            readiness_layout.addWidget(QLabel("Command"), 1, 0)
+            readiness_layout.addWidget(readiness_preview, 1, 1)
+            readiness_layout.addWidget(
+                self._copy_button("Copy readiness command", readiness_preview.toPlainText),
+                2,
+                1,
+                alignment=Qt.AlignmentFlag.AlignRight,
+            )
+            layout.addWidget(readiness_box)
 
             passkey_box = QGroupBox("Passkey guidance example")
             passkey_box.setObjectName("group")
@@ -1128,9 +1149,10 @@ def main() -> int:
             exposure_box.setObjectName("group")
             exposure_layout = QGridLayout(exposure_box)
             exposure_email = QLineEdit("you@example.com")
-            exposure_hibp_secret = QLineEdit("hibp-api-key")
+            exposure_hibp_secret = QLineEdit("")
+            exposure_hibp_secret.setPlaceholderText("Optional paid HIBP key secret")
             exposure_password_secret = QLineEdit("")
-            exposure_password_secret.setPlaceholderText("Optional password secret name")
+            exposure_password_secret.setPlaceholderText("Free password exposure check secret")
             exposure_accounts_json = QLineEdit("accounts.json")
             exposure_findings_json = QLineEdit("findings.json")
             exposure_preview = self._command_box()
@@ -1160,8 +1182,8 @@ def main() -> int:
                 widget.textChanged.connect(update_exposure_preview)
             exposure_fields = (
                 ("Email", exposure_email),
-                ("HIBP secret name", exposure_hibp_secret),
-                ("Password secret name", exposure_password_secret),
+                ("HIBP key secret", exposure_hibp_secret),
+                ("Password secret", exposure_password_secret),
                 ("Discovered accounts JSON", exposure_accounts_json),
                 ("Mailbox findings JSON", exposure_findings_json),
             )

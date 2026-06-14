@@ -13,14 +13,13 @@ from .exposure import ExposureReport, build_exposure_report
 from .gui import main as gui_main
 from .live_vault_test import build_live_test_candidate, preflight, summarize_preflight
 from .models import PasswordCandidate, VaultEntry
-from .oauth_mail import GmailApiMailProvider, GmailOAuthConfig, GraphOAuthConfig, MicrosoftGraphMailProvider
 from .passkeys import passkey_guidance
 from .passwords import PasswordPolicy, fingerprint_password, generate_passphrase, generate_password
 from .paths import user_state_dir
+from .readiness import build_readiness_checks
 from .reset_orchestrator import PasswordResetOrchestrator, open_reset_link
 from .rotation import build_rotation_choices, summarize_rotation_choices
 from .secure_files import delete_file, plaintext_file_warning
-from .secure_store import get_secret, set_secret
 from .sync import build_vault_dashboard, compare_vault_entries
 from .vaults import BitwardenVault, NordPassImportVault
 
@@ -34,6 +33,10 @@ def main() -> None:
     secret.add_argument("value")
 
     sub.add_parser("gui", help="Launch the desktop dashboard")
+
+    setup_check = sub.add_parser("setup-check", help="Show free setup readiness and paid-optional blockers")
+    setup_check.add_argument("--hibp-secret", help="Optional HIBP key secret name to check without revealing the key")
+    setup_check.add_argument("--json", action="store_true")
 
     scan = sub.add_parser("scan-imap", help="Scan an IMAP mailbox for risky account alerts")
     scan.add_argument("--host", required=True)
@@ -83,16 +86,16 @@ def main() -> None:
     breach.add_argument("--hibp-secret", required=True, help="OS-keychain secret containing the HIBP API key")
     breach.add_argument("--json", action="store_true")
 
-    pwned_password = sub.add_parser("pwned-password", help="Check a password against HIBP Pwned Passwords k-anonymity API")
+    pwned_password = sub.add_parser("pwned-password", help="Check a password against the free HIBP Pwned Passwords k-anonymity API")
     pwned_password.add_argument("--password-secret", required=True)
-    pwned_password.add_argument("--hibp-secret", required=True)
+    pwned_password.add_argument("--hibp-secret", help="Deprecated; not needed for the free Pwned Passwords range API")
 
     exposure = sub.add_parser(
         "exposure-plan",
         help="Safely combine mailbox findings and HIBP checks into a prioritized password-rotation plan",
     )
     exposure.add_argument("--email", required=True)
-    exposure.add_argument("--hibp-secret", required=True, help="OS-keychain secret containing the HIBP API key")
+    exposure.add_argument("--hibp-secret", help="Optional OS-keychain secret containing a paid HIBP key for email breach lookup")
     exposure.add_argument("--password-secret", help="Optional OS-keychain secret containing a password to check with HIBP k-anonymity")
     exposure.add_argument("--accounts-json", help="Optional JSON output from discover-imap")
     exposure.add_argument("--findings-json", help="Optional JSON output from scan-imap, scan-gmail-app-password, scan-gmail, or scan-graph")
@@ -155,10 +158,12 @@ def main() -> None:
 
     args = parser.parse_args()
     if args.command == "secret":
-        set_secret(args.name, args.value)
+        _set_secret(args.name, args.value)
         print(f"Stored secret '{args.name}' in the OS credential store.")
     elif args.command == "gui":
         raise SystemExit(gui_main())
+    elif args.command == "setup-check":
+        _setup_check(args)
     elif args.command == "scan-imap":
         _scan_imap(args)
     elif args.command == "discover-imap":
@@ -166,9 +171,13 @@ def main() -> None:
     elif args.command == "scan-gmail-app-password":
         _scan_gmail_app_password(args)
     elif args.command == "scan-gmail":
+        from .oauth_mail import GmailApiMailProvider, GmailOAuthConfig
+
         provider = GmailApiMailProvider(GmailOAuthConfig(args.client_secret_file, args.token_secret_name))
         _classify_messages(provider.fetch_messages(args.days), args)
     elif args.command == "scan-graph":
+        from .oauth_mail import GraphOAuthConfig, MicrosoftGraphMailProvider
+
         provider = MicrosoftGraphMailProvider(GraphOAuthConfig(args.tenant_id, args.client_id, args.token_secret_name))
         _classify_messages(provider.fetch_messages(args.days), args)
     elif args.command == "breach-check":
@@ -201,6 +210,18 @@ def main() -> None:
         _csv_status(args)
 
 
+def get_secret(name: str) -> str | None:
+    from .secure_store import get_secret as read_secret
+
+    return read_secret(name)
+
+
+def _set_secret(name: str, value: str) -> None:
+    from .secure_store import set_secret
+
+    set_secret(name, value)
+
+
 def _scan_imap(args: argparse.Namespace) -> None:
     password = get_secret(args.secret_name)
     if not password:
@@ -216,6 +237,17 @@ def _scan_imap(args: argparse.Namespace) -> None:
     ).scan()
     AuditLogger().write("email_scan", host=args.host, username=args.username, days=args.days, finding_count=len(findings))
     _print_findings(findings, args.json)
+
+
+def _setup_check(args: argparse.Namespace) -> None:
+    checks = build_readiness_checks(args.hibp_secret)
+    AuditLogger().write("setup_check", check_count=len(checks))
+    if args.json:
+        print(json.dumps([check.__dict__ for check in checks], indent=2))
+        return
+    print("Free setup readiness")
+    for check in checks:
+        print(f"- [{check.status}] {check.name}: {check.detail}")
 
 
 def _classify_messages(messages, args: argparse.Namespace) -> None:
@@ -307,12 +339,9 @@ def _breach_check(args: argparse.Namespace) -> None:
 
 def _pwned_password(args: argparse.Namespace) -> None:
     password = get_secret(args.password_secret)
-    api_key = get_secret(args.hibp_secret)
     if not password:
         raise SystemExit(f"Secret '{args.password_secret}' was not found.")
-    if not api_key:
-        raise SystemExit(f"Secret '{args.hibp_secret}' was not found.")
-    count = HibpBreachChecker(api_key).pwned_password_count(password)
+    count = HibpBreachChecker().pwned_password_count(password)
     AuditLogger().write("hibp_pwned_password_check", count=count)
     if count:
         print(f"Password appears {count} time(s) in HIBP Pwned Passwords. Do not use it.")
@@ -321,11 +350,16 @@ def _pwned_password(args: argparse.Namespace) -> None:
 
 
 def _exposure_plan(args: argparse.Namespace) -> None:
-    api_key = get_secret(args.hibp_secret)
-    if not api_key:
-        raise SystemExit(f"Secret '{args.hibp_secret}' was not found.")
-    checker = HibpBreachChecker(api_key)
-    breaches = checker.breaches_for_account(args.email)
+    checker = HibpBreachChecker()
+    breaches = []
+    email_breach_lookup_status = "not_run"
+    if args.hibp_secret:
+        api_key = get_secret(args.hibp_secret)
+        if not api_key:
+            raise SystemExit(f"Secret '{args.hibp_secret}' was not found.")
+        checker = HibpBreachChecker(api_key)
+        breaches = checker.breaches_for_account(args.email)
+        email_breach_lookup_status = "checked"
     pwned_count = None
     if args.password_secret:
         password = get_secret(args.password_secret)
@@ -334,7 +368,7 @@ def _exposure_plan(args: argparse.Namespace) -> None:
         pwned_count = checker.pwned_password_count(password)
     accounts = _load_discovered_accounts(Path(args.accounts_json)) if args.accounts_json else []
     findings = _load_findings(Path(args.findings_json)) if args.findings_json else []
-    report = build_exposure_report(args.email, breaches, accounts, findings, pwned_count)
+    report = build_exposure_report(args.email, breaches, accounts, findings, pwned_count, email_breach_lookup_status)
     AuditLogger().write(
         "exposure_plan",
         email=args.email,
@@ -501,6 +535,7 @@ def _exposure_report_to_dict(report: ExposureReport) -> dict[str, object]:
     return {
         "email_address": report.email_address,
         "breach_count": report.breach_count,
+        "email_breach_lookup_status": report.email_breach_lookup_status,
         "password_pwned_count": report.password_pwned_count,
         "rotation_count": report.rotation_count,
         "safety_boundary": report.safety_boundary,
@@ -520,7 +555,10 @@ def _exposure_report_to_dict(report: ExposureReport) -> dict[str, object]:
 def _print_exposure_report(report: ExposureReport) -> None:
     print(f"Safe exposure plan for {report.email_address}")
     print(report.safety_boundary)
-    print(f"HIBP breaches for email: {report.breach_count}")
+    if report.email_breach_lookup_status == "checked":
+        print(f"HIBP breaches for email: {report.breach_count}")
+    else:
+        print("HIBP email breach lookup: not run; this requires an optional paid HIBP API key")
     if report.password_pwned_count is None:
         print("Password exposure check: not run")
     elif report.password_pwned_count:

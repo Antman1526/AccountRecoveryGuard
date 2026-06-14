@@ -68,11 +68,11 @@ Current code ships IMAP plus optional OAuth adapters:
 
 ## Web Breach Checking
 
-The `breach-check` command integrates with Have I Been Pwned (HIBP) for account-level breach checks. HIBP breached-account checks require an API key and send the searched email address to HIBP. The tool stores the HIBP key in the OS credential store and logs only breach counts, not the API key.
+The `breach-check` command integrates with Have I Been Pwned (HIBP) for account-level breach checks. HIBP breached-account checks require an API key and send the searched email address to HIBP. This is the optional paid path. The tool stores the HIBP key in the OS credential store and logs only breach counts, not the API key.
 
 This tells you whether the email address appeared in known breach datasets. It does not prove that every linked service account is compromised, and it cannot detect private breaches HIBP does not have.
 
-The `pwned-password` command uses the HIBP Pwned Passwords k-anonymity range API. Only the first five SHA-1 hash characters are sent to HIBP; the plaintext password is read from the OS credential store and is never logged.
+The `pwned-password` command uses the free HIBP Pwned Passwords k-anonymity range API. It does not require a HIBP API key. Only the first five SHA-1 hash characters are sent to HIBP; the plaintext password is read from the OS credential store and is never logged.
 
 Risk scoring combines mailbox findings, discovery confidence, breach names, reused-password evidence, and MFA unknown status. Scores are local signals for prioritization, not proof of compromise.
 
@@ -80,8 +80,8 @@ The `exposure-plan` command is the safe replacement for "search the whole web fo
 
 - authorized mailbox scan results,
 - discovered accounts from your mailbox,
-- HIBP breached-account results,
-- optional HIBP Pwned Passwords checks.
+- optional paid HIBP breached-account results,
+- optional free HIBP Pwned Passwords checks.
 
 It does not crawl paste sites, dark-web sources, criminal forums, or random web pages for plaintext passwords. That boundary is deliberate: those sources can expose you further, produce unreliable data, and create legal/security risk. The app uses reputable breach intelligence and tells you which accounts to rotate first.
 
@@ -275,6 +275,14 @@ The GUI opens to a guided first-run flow:
 
 After a scan exists, the dashboard shows an account safety summary, accounts needing attention, vault sync status, cleanup reminders, and secondary advanced tools for troubleshooting.
 
+Check what is ready without paying for anything:
+
+```bash
+arg setup-check
+```
+
+This labels local free setup as `ready` or `action_needed`, and labels paid-only upgrades such as Apple notarization, Windows code signing, and optional HIBP email-breach lookup as `paid_optional`.
+
 Check an email address against Have I Been Pwned:
 
 ```bash
@@ -286,10 +294,22 @@ Check a candidate password against HIBP Pwned Passwords:
 
 ```bash
 arg secret candidate-password "PASTE_CANDIDATE"
-arg pwned-password --password-secret candidate-password --hibp-secret hibp-api-key
+arg pwned-password --password-secret candidate-password
 ```
 
-Create a safe exposure plan from mailbox scan JSON plus HIBP:
+This is the free check. It uses the HIBP Pwned Passwords range API and does not require a HIBP API key.
+
+Create a safe exposure plan from mailbox scan JSON plus the free password check:
+
+```bash
+arg exposure-plan \
+  --email you@example.com \
+  --password-secret candidate-password \
+  --accounts-json accounts.json \
+  --findings-json findings.json
+```
+
+Add the optional paid HIBP email-breach lookup only after you have a HIBP API key:
 
 ```bash
 arg exposure-plan \
@@ -444,6 +464,7 @@ account-recovery-guard/
     passkeys.py                     Passkey support guidance.
     passwords.py                    Strong password/passphrase generation and fingerprinting.
     paths.py                        Cross-platform app data/log path helpers.
+    readiness.py                    Free setup readiness checks and paid-optional boundary labels.
     reset_orchestrator.py           Manual-safe password reset workflow and Playwright opener.
     risk.py                         Local account risk scoring.
     rotation.py                     Five-choice password rotation helper.
@@ -461,6 +482,7 @@ account-recovery-guard/
     test_rotation.py                Verifies five unique password choices.
     test_rotation_safety.py         Verifies masked password choice display.
     test_pwned_passwords.py         Verifies HIBP k-anonymity response parsing.
+    test_readiness.py               Verifies setup readiness and paid/free boundary reporting.
     test_risk.py                    Verifies local risk scoring.
     test_secure_files.py            Verifies stale CSV warnings.
     test_vault_dashboard.py         Verifies vault drift dashboard rows.
@@ -474,10 +496,10 @@ account-recovery-guard/
 - Full password reset automation is intentionally limited. MFA, CAPTCHAs, risk checks, and site-specific flows should stay human-approved.
 - NordPass personal vault writes are not fully automatable through an official public CRUD API. CSV import/export is the safest supported path today.
 - NordPass import/export CSVs contain plaintext passwords. Keep them local, import immediately, verify, then delete.
-- IMAP scanning is practical but not ideal. Gmail API and Microsoft Graph adapters should be added for stronger OAuth-based production use.
-- Gmail API and Microsoft Graph adapters require you to create OAuth app credentials in Google Cloud or Microsoft Entra.
+- IMAP scanning is practical and free for providers that support app passwords. Gmail API and Microsoft Graph OAuth are stronger for production, but require free provider-side app setup.
+- Gmail API and Microsoft Graph adapters require you to create OAuth app credentials in Google Cloud or Microsoft Entra; those setup steps may be too technical for some users.
 - The tool does not decide that an account is definitely compromised; it flags risk signals for review.
-- HIBP breached-account checks disclose the searched email address to HIBP and require a paid API key.
+- HIBP Pwned Passwords checks are free and k-anonymous. HIBP breached-account email checks disclose the searched email address to HIBP and require a paid API key.
 - Passkey creation remains a manual service-specific enrollment process.
 - Signing requires your Apple Developer ID certificate and Windows code-signing certificate.
 - A local macOS machine can create the `.dmg`; the Windows `.exe` should be built on Windows or via the included GitHub Actions workflow.
@@ -499,3 +521,4 @@ account-recovery-guard/
 - Python keyring supported backends: https://pypi.org/project/keyring/
 - Playwright browser installation: https://playwright.dev/python/docs/browsers
 - Have I Been Pwned API v3 breached-account behavior: https://haveibeenpwned.com/api/v3
+- Have I Been Pwned Pwned Passwords range API is free and does not require authentication: https://haveibeenpwned.com/scalar/
