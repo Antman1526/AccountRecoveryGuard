@@ -13,7 +13,7 @@ from urllib.parse import urlparse
 
 from bs4 import BeautifulSoup
 
-from .domain_safety import https_url_matches_domain
+from .domain_safety import has_unsafe_redirect_target, https_url_matches_domain
 from .models import CompromisedAccountFinding, Severity
 
 RISK_PATTERNS: tuple[tuple[re.Pattern[str], str, int], ...] = (
@@ -65,6 +65,9 @@ class EmailClassifier:
             if not https_url_matches_domain(reset_link, sender_domain):
                 score += 5
                 reasons.append("reset/security link domain mismatch")
+            elif has_unsafe_redirect_target(reset_link, sender_domain):
+                score += 5
+                reasons.append("reset/security link contains unsafe redirect")
 
         return CompromisedAccountFinding(
             service_name=service_name_from_domain(sender_domain),

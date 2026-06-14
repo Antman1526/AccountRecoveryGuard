@@ -248,6 +248,19 @@ def test_account_review_blocks_http_or_mismatched_reset_link():
     assert "dropbox.example.com" not in phishing_link.reset_link_safety_message
 
 
+def test_account_review_blocks_reset_link_with_unsafe_redirect():
+    account = AccountReview(
+        service_name="Dropbox",
+        username="me@example.com",
+        url="https://dropbox.com",
+        reset_link="https://dropbox.com/reset?continue=https%3A%2F%2Fevil.test%2Fsteal",
+    )
+
+    assert account.reset_link_is_trusted is False
+    assert "unsafe redirect" in account.reset_link_safety_message
+    assert "official website" in account.reset_link_safety_message
+
+
 def test_scan_summary_recommends_highest_risk_finding():
     finding = CompromisedAccountFinding(
         service_name="Dropbox",

@@ -99,6 +99,35 @@ def test_classifier_allows_same_service_reset_link_subdomain():
     assert finding.severity == "high"
 
 
+def test_classifier_flags_reset_link_with_external_redirect_target():
+    msg = _message(
+        "Security alert: your account password was reset",
+        "Example Security <security@example.com>",
+        "If this was not you, visit https://example.com/reset?continue=https%3A%2F%2Fevil.test%2Fsteal",
+    )
+
+    finding = EmailClassifier().classify(msg)
+
+    assert finding is not None
+    assert finding.reset_link == "https://example.com/reset?continue=https%3A%2F%2Fevil.test%2Fsteal"
+    assert "reset/security link contains unsafe redirect" in finding.reasons
+    assert finding.severity == "critical"
+
+
+def test_classifier_allows_reset_link_with_same_service_redirect_target():
+    msg = _message(
+        "Security alert: your account password was reset",
+        "Example Security <security@example.com>",
+        "If this was not you, visit https://example.com/reset?continue=https%3A%2F%2Faccounts.example.com%2Fsecurity",
+    )
+
+    finding = EmailClassifier().classify(msg)
+
+    assert finding is not None
+    assert "reset/security link contains unsafe redirect" not in finding.reasons
+    assert finding.severity == "high"
+
+
 def test_classifier_ignores_unrelated_newsletter():
     msg = _message(
         "June newsletter",

@@ -3,7 +3,7 @@ from __future__ import annotations
 from dataclasses import dataclass, field, replace
 from enum import StrEnum
 
-from .domain_safety import https_url_matches_domain
+from .domain_safety import has_unsafe_redirect_target, safe_reset_link_matches_domain
 from .models import CompromisedAccountFinding, DiscoveredAccount, PasswordCandidate, RotationChoiceSummary
 from .rotation import summarize_rotation_choices
 
@@ -58,7 +58,7 @@ class AccountReview:
 
     @property
     def reset_link_is_trusted(self) -> bool:
-        return https_url_matches_domain(self.reset_link, self.url)
+        return safe_reset_link_matches_domain(self.reset_link, self.url)
 
     @property
     def reset_link_safety_message(self) -> str:
@@ -66,6 +66,8 @@ class AccountReview:
             return "Use the official website or app to reset this password."
         if self.reset_link_is_trusted:
             return "This reset link uses HTTPS and matches the expected service domain. Check the page before entering anything."
+        if has_unsafe_redirect_target(self.reset_link, self.url):
+            return "This reset link contains an unsafe redirect. Use the official website or app instead."
         return "This email reset link does not match the expected service domain. Use the official website or app instead."
 
 
