@@ -291,6 +291,7 @@ The GUI opens to a guided first-run flow:
 - Avoid sending the same password check repeatedly in one app session; repeated checks reuse a local keyed fingerprint result instead of contacting HIBP again.
 - Use the password-exposure result to guide rotation without overstating certainty: if the checked password was found, rotate only accounts where you reused it, one at a time.
 - Open reset links only when they use HTTPS and match the expected service domain; otherwise use the official site or app manually.
+- Require confirmation that you are on the official site/app or verified reset page before copying a generated password.
 - Rotate passwords with masked choices, then prepare vault sync only after confirming the password was changed on the real service.
 - Stage the NordPass import CSV from the guided rotation flow, import it immediately, verify, and delete it after use with the in-app cleanup button.
 

@@ -104,6 +104,12 @@ def password_exposure_prompt_lines(count: int | None = None) -> list[str]:
     return lines + ["If it is not found, still rotate accounts with suspicious mailbox alerts."]
 
 
+def rotation_copy_confirmation_text(reset_link_is_trusted: bool) -> str:
+    if reset_link_is_trusted:
+        return "I am on the verified reset page or the official app."
+    return "I am on the official website or app, not a suspicious email link."
+
+
 def safe_recovery_scope_lines() -> list[str]:
     return [
         "The safe path is mailbox evidence plus the free HIBP k-anonymous password check.",

@@ -12,6 +12,7 @@ from .gui_workflow import (
     consumer_readiness_rows,
     password_exposure_prompt_lines,
     recovery_stages,
+    rotation_copy_confirmation_text,
     safe_recovery_scope_lines,
     suggested_next_actions,
 )
@@ -817,9 +818,15 @@ def main() -> int:
                 )
             )
             button_row = QHBoxLayout()
+            copy_guard = QCheckBox(rotation_copy_confirmation_text(account.reset_link_is_trusted))
+            copy_guard.setObjectName("consentCheck")
+            copy_guard.setCursor(Qt.CursorShape.PointingHandCursor)
             copy = QPushButton("Copy selected password")
             copy.setObjectName("primaryButton")
             copy.setCursor(Qt.CursorShape.PointingHandCursor)
+            copy.setEnabled(False)
+            copy_guard.stateChanged.connect(lambda state, button=copy: button.setEnabled(state != 0))
+            button_row.addWidget(copy_guard)
             copy.clicked.connect(self._copy_selected_rotation_password)
             button_row.addWidget(copy)
             if account.reset_link and account.reset_link_is_trusted:
