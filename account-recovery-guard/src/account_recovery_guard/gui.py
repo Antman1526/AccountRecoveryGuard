@@ -913,10 +913,10 @@ def main() -> int:
                 reset.clicked.connect(lambda checked=False, selected=account: self._open_protected_reset_browser(selected))
                 button_row.addWidget(reset)
             elif account.url:
-                official = QPushButton("Open official site")
+                official = QPushButton("Open protected official site")
                 official.setObjectName("secondaryButton")
                 official.setCursor(Qt.CursorShape.PointingHandCursor)
-                official.clicked.connect(lambda checked=False, link=account.url: webbrowser.open(link))
+                official.clicked.connect(lambda checked=False, selected=account: self._open_protected_official_site(selected))
                 button_row.addWidget(official)
             changed_text, verified_text = vault_sync_confirmation_texts()
             confirmed = QCheckBox(changed_text)
@@ -987,6 +987,16 @@ def main() -> int:
                 if hasattr(self, "rotation_status_label"):
                     self.rotation_status_label.setText("Reset link was not opened. Use the official website or app instead.")
                 return
+            self._open_protected_recovery_browser(account.reset_link, account.url)
+
+        def _open_protected_official_site(self, account: AccountReview) -> None:
+            if not account.url:
+                if hasattr(self, "rotation_status_label"):
+                    self.rotation_status_label.setText("No official site URL is available. Open the service manually.")
+                return
+            self._open_protected_recovery_browser(account.url, account.url)
+
+        def _open_protected_recovery_browser(self, recovery_url: str, expected_domain_or_url: str | None) -> None:
             if self._reset_browser_thread is not None:
                 if hasattr(self, "rotation_status_label"):
                     self.rotation_status_label.setText("A protected recovery browser is already open.")
@@ -996,7 +1006,7 @@ def main() -> int:
                     "Opening protected recovery browser with downloads blocked. Close it when the reset is complete."
                 )
             thread = QThread(self)
-            worker = ResetBrowserWorker(account.reset_link, account.url)
+            worker = ResetBrowserWorker(recovery_url, expected_domain_or_url)
             self._reset_browser_thread = thread
             self._reset_browser_worker = worker
             worker.moveToThread(thread)

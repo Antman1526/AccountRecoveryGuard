@@ -78,6 +78,16 @@ def test_advanced_rotation_copy_requires_official_page_confirmation():
     assert "official_page_confirmed.stateChanged.connect" in source
 
 
+def test_guided_official_site_uses_protected_recovery_browser():
+    gui_source = Path(__file__).parents[1] / "src" / "account_recovery_guard" / "gui.py"
+    source = gui_source.read_text(encoding="utf-8")
+
+    assert "Open protected official site" in source
+    assert "def _open_protected_official_site" in source
+    assert "self._open_protected_recovery_browser(account.url, account.url)" in source
+    assert "webbrowser.open(link)" not in source
+
+
 @pytestmark_widgets
 def test_step_header_renders_title_and_subtitle(app):
     header = StepHeader("Connect email safely", "We scan account and security emails locally.")

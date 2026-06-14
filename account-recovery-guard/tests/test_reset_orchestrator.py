@@ -45,6 +45,12 @@ def test_browser_reset_link_validation_allows_expected_https_domain():
     assert link == "https://example.com/reset"
 
 
+def test_browser_validation_allows_official_site_fallback_url():
+    link = validate_browser_reset_link("https://example.com", "https://example.com")
+
+    assert link == "https://example.com"
+
+
 def test_browser_reset_link_validation_rejects_http_link():
     with pytest.raises(ResetLinkSafetyError):
         validate_browser_reset_link("http://example.com/reset", "example.com")
