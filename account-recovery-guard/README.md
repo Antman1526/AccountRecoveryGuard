@@ -312,8 +312,10 @@ Optional paid lookup: check an email address against Have I Been Pwned:
 
 ```bash
 arg secret hibp-api-key
-arg breach-check --email you@example.com --hibp-secret hibp-api-key
+arg breach-check --email you@example.com --hibp-secret hibp-api-key --allow-paid-email-lookup
 ```
+
+`breach-check` intentionally refuses to run without `--allow-paid-email-lookup` because this path requires a paid HIBP API key and sends the searched email address to HIBP.
 
 Check an old or reused password against HIBP Pwned Passwords. Omit the value so it is entered at the hidden prompt:
 

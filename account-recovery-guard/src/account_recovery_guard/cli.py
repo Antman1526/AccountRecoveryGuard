@@ -93,6 +93,11 @@ def main() -> None:
     breach = sub.add_parser("breach-check", help="Check an email address against Have I Been Pwned")
     breach.add_argument("--email", required=True)
     breach.add_argument("--hibp-secret", required=True, help="OS-keychain secret containing the HIBP API key")
+    breach.add_argument(
+        "--allow-paid-email-lookup",
+        action="store_true",
+        help="Required confirmation because HIBP breached-account lookup requires a paid API key and sends the email address to HIBP",
+    )
     breach.add_argument("--json", action="store_true")
 
     pwned_password = sub.add_parser("pwned-password", help="Check a password against the free HIBP Pwned Passwords k-anonymity API")
@@ -366,6 +371,12 @@ def _scan_gmail_app_password(args: argparse.Namespace) -> None:
 
 
 def _breach_check(args: argparse.Namespace) -> None:
+    if not getattr(args, "allow_paid_email_lookup", False):
+        raise SystemExit(
+            "Free-only mode: breach-check uses the paid HIBP email-breach lookup. Add "
+            "--allow-paid-email-lookup only after you decide to use that paid path. The free pwned-password "
+            "check does not need this."
+        )
     api_key = get_secret(args.hibp_secret)
     if not api_key:
         raise SystemExit(f"Secret '{args.hibp_secret}' was not found.")

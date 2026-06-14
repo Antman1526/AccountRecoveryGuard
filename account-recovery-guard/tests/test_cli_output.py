@@ -10,7 +10,15 @@ from datetime import UTC, datetime
 import pytest
 
 from account_recovery_guard import cli
-from account_recovery_guard.cli import _csv_status, _exposure_plan, _print_findings, _redact_url_for_display, _secret_value_from_args
+from account_recovery_guard.breach_checker import HibpBreach
+from account_recovery_guard.cli import (
+    _breach_check,
+    _csv_status,
+    _exposure_plan,
+    _print_findings,
+    _redact_url_for_display,
+    _secret_value_from_args,
+)
 from account_recovery_guard.models import CompromisedAccountFinding
 
 
@@ -112,6 +120,48 @@ def test_exposure_plan_free_path_does_not_require_paid_lookup(capsys) -> None:
     data = json.loads(capsys.readouterr().out)
     assert data["email_breach_lookup_status"] == "not_run"
     assert data["breach_count"] == 0
+
+
+def test_breach_check_blocks_paid_lookup_without_explicit_opt_in() -> None:
+    args = argparse.Namespace(
+        email="me@example.com",
+        hibp_secret="hibp-api-key",
+        allow_paid_email_lookup=False,
+        json=True,
+    )
+
+    with pytest.raises(SystemExit) as exc:
+        _breach_check(args)
+
+    assert "Free-only mode" in str(exc.value)
+    assert "paid HIBP email-breach lookup" in str(exc.value)
+
+
+def test_breach_check_allows_paid_lookup_after_explicit_opt_in(monkeypatch, capsys) -> None:
+    args = argparse.Namespace(
+        email="me@example.com",
+        hibp_secret="hibp-api-key",
+        allow_paid_email_lookup=True,
+        json=True,
+    )
+
+    monkeypatch.setattr(cli, "get_secret", lambda name: "paid-api-key")
+
+    class FakeChecker:
+        def __init__(self, api_key):
+            self.api_key = api_key
+
+        def breaches_for_account(self, email):
+            assert self.api_key == "paid-api-key"
+            assert email == "me@example.com"
+            return [HibpBreach("ExampleBreach")]
+
+    monkeypatch.setattr(cli, "HibpBreachChecker", FakeChecker)
+
+    _breach_check(args)
+
+    data = json.loads(capsys.readouterr().out)
+    assert data["breaches"] == [{"name": "ExampleBreach"}]
 
 
 def test_csv_status_defaults_to_staged_nordpass_path(tmp_path, monkeypatch, capsys) -> None:
