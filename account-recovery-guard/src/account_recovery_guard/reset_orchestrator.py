@@ -59,6 +59,7 @@ class PasswordResetOrchestrator:
         self,
         reset_link: str,
         expected_domain_or_url: str | None = None,
+        wait_for_enter: bool = True,
     ) -> None:
         from playwright.async_api import async_playwright
 
@@ -73,9 +74,16 @@ class PasswordResetOrchestrator:
                 await page.goto(validated_link, wait_until="domcontentloaded", timeout=30_000)
                 print(
                     "Browser opened with recovery downloads blocked. Complete the reset manually, "
-                    "then return here and press Enter."
+                    + (
+                        "then return here and press Enter."
+                        if wait_for_enter
+                        else "then close the recovery browser window when finished."
+                    )
                 )
-                await asyncio.to_thread(input)
+                if wait_for_enter:
+                    await asyncio.to_thread(input)
+                else:
+                    await page.wait_for_event("close", timeout=0)
             finally:
                 await context.close()
                 await browser.close()
@@ -83,6 +91,16 @@ class PasswordResetOrchestrator:
 
 def open_reset_link(reset_link: str, expected_domain_or_url: str | None = None) -> None:
     asyncio.run(PasswordResetOrchestrator().open_reset_link_for_manual_completion(reset_link, expected_domain_or_url))
+
+
+def open_reset_link_window(reset_link: str, expected_domain_or_url: str | None = None) -> None:
+    asyncio.run(
+        PasswordResetOrchestrator().open_reset_link_for_manual_completion(
+            reset_link,
+            expected_domain_or_url,
+            wait_for_enter=False,
+        )
+    )
 
 
 def validate_browser_reset_link(reset_link: str, expected_domain_or_url: str | None = None) -> str:

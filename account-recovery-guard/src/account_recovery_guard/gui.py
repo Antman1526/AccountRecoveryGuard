@@ -81,7 +81,7 @@ def main() -> int:
         visible_setup_fields,
     )
     from .gui_state import AccountReview, GuiAppState, MailProviderChoice, ScanSummary, VaultSyncStatus, requires_second_person_consent
-    from .gui_workers import PasswordExposureWorker, ScanWorker
+    from .gui_workers import PasswordExposureWorker, ResetBrowserWorker, ScanWorker
     from .vaults import BitwardenVault
 
     class MainWindow(QMainWindow):
@@ -92,6 +92,8 @@ def main() -> int:
             self._scan_thread = None
             self._password_exposure_worker = None
             self._password_exposure_thread = None
+            self._reset_browser_worker = None
+            self._reset_browser_thread = None
             self._active_password_exposure_status = None
             self._active_password_exposure_button = None
             self._password_exposure_service = GuiPasswordExposureService()
@@ -899,10 +901,10 @@ def main() -> int:
             copy.clicked.connect(self._copy_selected_rotation_password)
             button_row.addWidget(copy)
             if account.reset_link and account.reset_link_is_trusted:
-                reset = QPushButton("Open verified reset link")
+                reset = QPushButton("Open protected reset browser")
                 reset.setObjectName("secondaryButton")
                 reset.setCursor(Qt.CursorShape.PointingHandCursor)
-                reset.clicked.connect(lambda checked=False, link=account.reset_link: webbrowser.open(link))
+                reset.clicked.connect(lambda checked=False, selected=account: self._open_protected_reset_browser(selected))
                 button_row.addWidget(reset)
             elif account.url:
                 official = QPushButton("Open official site")
@@ -971,6 +973,51 @@ def main() -> int:
                     if copied
                     else "Clipboard copy is unavailable."
                 )
+
+        def _open_protected_reset_browser(self, account: AccountReview) -> None:
+            if not account.reset_link or not account.reset_link_is_trusted:
+                if hasattr(self, "rotation_status_label"):
+                    self.rotation_status_label.setText("Reset link was not opened. Use the official website or app instead.")
+                return
+            if self._reset_browser_thread is not None:
+                if hasattr(self, "rotation_status_label"):
+                    self.rotation_status_label.setText("A protected recovery browser is already open.")
+                return
+            if hasattr(self, "rotation_status_label"):
+                self.rotation_status_label.setText(
+                    "Opening protected recovery browser with downloads blocked. Close it when the reset is complete."
+                )
+            thread = QThread(self)
+            worker = ResetBrowserWorker(account.reset_link, account.url)
+            self._reset_browser_thread = thread
+            self._reset_browser_worker = worker
+            worker.moveToThread(thread)
+            thread.started.connect(worker.run)
+            worker.finished.connect(self._finish_reset_browser)
+            worker.failed.connect(self._handle_reset_browser_failure)
+            worker.finished.connect(worker.release_sensitive_refs)
+            worker.failed.connect(worker.release_sensitive_refs)
+            worker.finished.connect(worker.deleteLater)
+            worker.failed.connect(worker.deleteLater)
+            worker.finished.connect(self._clear_reset_browser_refs)
+            worker.failed.connect(self._clear_reset_browser_refs)
+            worker.finished.connect(thread.quit)
+            worker.failed.connect(thread.quit)
+            thread.finished.connect(thread.deleteLater)
+            thread.start()
+
+        def _finish_reset_browser(self, message: str) -> None:
+            if hasattr(self, "rotation_status_label"):
+                self.rotation_status_label.setText(message)
+
+        def _handle_reset_browser_failure(self, message: str) -> None:
+            if hasattr(self, "rotation_status_label"):
+                self.rotation_status_label.setText(message)
+
+        @Slot()
+        def _clear_reset_browser_refs(self) -> None:
+            self._reset_browser_worker = None
+            self._reset_browser_thread = None
 
         def _prepare_vault_sync_after_rotation(self) -> None:
             session = self.state.rotation_session
