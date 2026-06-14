@@ -3,7 +3,7 @@ from __future__ import annotations
 import asyncio
 from urllib.parse import unquote, urlparse
 
-from .domain_safety import safe_reset_link_matches_domain
+from .domain_safety import redirect_target_values, safe_reset_link_matches_domain
 from .models import CompromisedAccountFinding, ResetWorkflow
 
 
@@ -111,6 +111,8 @@ def validate_browser_reset_link(reset_link: str, expected_domain_or_url: str | N
         raise ResetLinkSafetyError("Reset links opened by the browser helper cannot include embedded credentials.")
     if is_blocked_recovery_download_url(reset_link):
         raise ResetLinkSafetyError("Recovery browser links cannot point directly to installers, archives, or scripts.")
+    if any(is_blocked_recovery_download_url(target) for target in redirect_target_values(reset_link)):
+        raise ResetLinkSafetyError("Recovery browser redirects cannot point to installers, archives, or scripts.")
     if expected_domain_or_url and not safe_reset_link_matches_domain(reset_link, expected_domain_or_url):
         raise ResetLinkSafetyError("Reset link failed domain or redirect safety checks.")
     return reset_link

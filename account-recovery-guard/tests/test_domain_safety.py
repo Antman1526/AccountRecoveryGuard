@@ -1,6 +1,7 @@
 from account_recovery_guard.domain_safety import (
     has_unsafe_redirect_target,
     https_url_matches_domain,
+    redirect_target_values,
     safe_reset_link_matches_domain,
 )
 
@@ -35,3 +36,17 @@ def test_safe_reset_link_blocks_insecure_redirect_target():
 
     assert safe_reset_link_matches_domain(url, "example.com") is False
     assert has_unsafe_redirect_target(url, "example.com") is True
+
+
+def test_redirect_target_values_returns_only_known_redirect_parameters():
+    url = (
+        "https://example.com/reset?"
+        "continue=https%3A%2F%2Faccounts.example.com%2Fsecurity"
+        "&token=secret"
+        "#next=https%3A%2F%2Fexample.com%2Fsettings"
+    )
+
+    assert redirect_target_values(url) == (
+        "https://accounts.example.com/security",
+        "https://example.com/settings",
+    )

@@ -58,10 +58,7 @@ def has_unsafe_redirect_target(url: str | None, expected_domain_or_url: str | No
     if not url:
         return False
     expected_host = host_from_domain_or_url(expected_domain_or_url)
-    parsed = urlparse(url)
-    for key, value in _redirect_parameter_values(parsed.query, parsed.fragment):
-        if key not in REDIRECT_PARAMETER_NAMES:
-            continue
+    for value in redirect_target_values(url):
         target_host = _redirect_target_host(value)
         if not target_host:
             continue
@@ -70,6 +67,17 @@ def has_unsafe_redirect_target(url: str | None, expected_domain_or_url: str | No
         if not https_url_matches_domain(value, expected_host):
             return True
     return False
+
+
+def redirect_target_values(url: str | None) -> tuple[str, ...]:
+    if not url:
+        return ()
+    parsed = urlparse(url)
+    return tuple(
+        value
+        for key, value in _redirect_parameter_values(parsed.query, parsed.fragment)
+        if key in REDIRECT_PARAMETER_NAMES
+    )
 
 
 def host_from_domain_or_url(value: str | None) -> str:

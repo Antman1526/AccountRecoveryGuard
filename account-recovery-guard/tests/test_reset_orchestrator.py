@@ -83,6 +83,27 @@ def test_browser_reset_link_validation_rejects_direct_download_urls(url):
         validate_browser_reset_link(url, "example.com")
 
 
+def test_browser_validation_allows_same_service_redirect_to_account_page():
+    link = validate_browser_reset_link(
+        "https://example.com/reset?continue=https%3A%2F%2Faccounts.example.com%2Fsecurity",
+        "example.com",
+    )
+
+    assert link.startswith("https://example.com/reset")
+
+
+@pytest.mark.parametrize(
+    "url",
+    (
+        "https://example.com/reset?continue=https%3A%2F%2Fexample.com%2Fsecurity-update.exe",
+        "https://example.com/reset?next=%2F%2Fexample.com%2Freset-kit.zip",
+    ),
+)
+def test_browser_reset_link_validation_rejects_redirects_to_download_urls(url):
+    with pytest.raises(ResetLinkSafetyError):
+        validate_browser_reset_link(url, "example.com")
+
+
 def test_recovery_browser_blocks_common_malware_download_urls():
     assert is_blocked_recovery_download_url("https://example.com/download/security-update.exe") is True
     assert is_blocked_recovery_download_url("https://example.com/files/recovery%20tool.pkg") is True
