@@ -3,12 +3,14 @@ from __future__ import annotations
 import argparse
 import io
 import json
+import os
+import time
 from datetime import UTC, datetime
 
 import pytest
 
 from account_recovery_guard import cli
-from account_recovery_guard.cli import _exposure_plan, _print_findings, _redact_url_for_display, _secret_value_from_args
+from account_recovery_guard.cli import _csv_status, _exposure_plan, _print_findings, _redact_url_for_display, _secret_value_from_args
 from account_recovery_guard.models import CompromisedAccountFinding
 
 
@@ -110,3 +112,28 @@ def test_exposure_plan_free_path_does_not_require_paid_lookup(capsys) -> None:
     data = json.loads(capsys.readouterr().out)
     assert data["email_breach_lookup_status"] == "not_run"
     assert data["breach_count"] == 0
+
+
+def test_csv_status_defaults_to_staged_nordpass_path(tmp_path, monkeypatch, capsys) -> None:
+    staged = tmp_path / "nordpass-import.csv"
+    staged.write_text("plaintext", encoding="utf-8")
+    old_timestamp = time.time() - 600
+    os.utime(staged, (old_timestamp, old_timestamp))
+    monkeypatch.setattr(cli, "default_nordpass_import_csv_path", lambda: staged)
+
+    _csv_status(argparse.Namespace(path=None, ttl_seconds=300, delete=False))
+
+    output = capsys.readouterr().out
+    assert "Plaintext CSV is older" in output
+    assert str(staged) in output
+
+
+def test_csv_status_can_delete_default_staged_nordpass_path(tmp_path, monkeypatch, capsys) -> None:
+    staged = tmp_path / "nordpass-import.csv"
+    staged.write_text("plaintext", encoding="utf-8")
+    monkeypatch.setattr(cli, "default_nordpass_import_csv_path", lambda: staged)
+
+    _csv_status(argparse.Namespace(path=None, ttl_seconds=300, delete=True))
+
+    assert capsys.readouterr().out.strip() == "Deleted."
+    assert not staged.exists()

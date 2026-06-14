@@ -22,7 +22,7 @@ from .paths import user_state_dir
 from .readiness import build_readiness_checks
 from .reset_orchestrator import PasswordResetOrchestrator, open_reset_link
 from .rotation import build_rotation_choices, summarize_rotation_choices
-from .secure_files import delete_file, plaintext_file_warning
+from .secure_files import default_nordpass_import_csv_path, delete_file, plaintext_file_warning
 from .sync import build_vault_dashboard, compare_vault_entries
 from .vaults import BitwardenVault, NordPassImportVault
 
@@ -129,7 +129,7 @@ def main() -> None:
     rotate.add_argument("--url")
     rotate.add_argument("--reset-link")
     rotate.add_argument("--length", type=int, default=32)
-    rotate.add_argument("--nordpass-csv", default=str(default_data_path() / "nordpass-import.csv"))
+    rotate.add_argument("--nordpass-csv", default=str(default_nordpass_import_csv_path()))
     rotate.add_argument("--skip-bitwarden", action="store_true")
     rotate.add_argument("--open", action="store_true", help="Open reset link in Playwright before vault write")
     rotate.add_argument("--reveal-all", action="store_true", help="Unsafe: print every generated plaintext choice")
@@ -141,7 +141,7 @@ def main() -> None:
     write.add_argument("--url")
     write.add_argument("--password-secret", required=True, help="Keychain secret containing the new password")
     write.add_argument("--note", default="Rotated by Account Recovery Guard")
-    write.add_argument("--nordpass-csv", default=str(default_data_path() / "nordpass-import.csv"))
+    write.add_argument("--nordpass-csv", default=str(default_nordpass_import_csv_path()))
     write.add_argument("--skip-bitwarden", action="store_true")
 
     verify = sub.add_parser("verify-sync", help="Compare Bitwarden entry with a NordPass export CSV")
@@ -165,7 +165,11 @@ def main() -> None:
     passkey.add_argument("--service", required=True)
 
     csv = sub.add_parser("csv-status", help="Warn about or delete staged plaintext NordPass CSV files")
-    csv.add_argument("path")
+    csv.add_argument(
+        "path",
+        nargs="?",
+        help="CSV path to inspect. Defaults to the app's staged NordPass import CSV.",
+    )
     csv.add_argument("--ttl-seconds", type=int, default=300)
     csv.add_argument("--delete", action="store_true")
 
@@ -556,12 +560,13 @@ def _vault_live_test(args: argparse.Namespace) -> None:
 
 
 def _csv_status(args: argparse.Namespace) -> None:
-    path = Path(args.path)
+    path = Path(args.path) if args.path else default_nordpass_import_csv_path()
     if args.delete:
         deleted = delete_file(path)
         print("Deleted." if deleted else "File not found.")
         return
-    print(plaintext_file_warning(path, args.ttl_seconds) or "CSV is not stale or does not exist.")
+    message = plaintext_file_warning(path, args.ttl_seconds) or "CSV is not stale or does not exist."
+    print(f"{message} Location: {path}")
 
 
 def _finding_to_dict(finding) -> dict[str, object]:

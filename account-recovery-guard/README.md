@@ -403,6 +403,8 @@ arg vault-dashboard --bitwarden-export bitwarden.csv --nordpass-export nordpass.
 Check or delete a staged plaintext NordPass CSV:
 
 ```bash
+arg csv-status
+arg csv-status --delete
 arg csv-status /path/to/nordpass-import.csv
 arg csv-status /path/to/nordpass-import.csv --delete
 ```

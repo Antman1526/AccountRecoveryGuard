@@ -20,7 +20,6 @@ from .gui_workflow import (
 )
 from .gui_theme import calm_shield_stylesheet
 from .passkeys import passkey_guidance
-from .paths import user_state_dir
 from .readiness import build_readiness_checks
 from .rotation import build_rotation_choices, summarize_rotation_choices
 from .secure_files import default_nordpass_import_csv_path, delete_file, staged_nordpass_csv_warning
@@ -1502,7 +1501,7 @@ def main() -> int:
             username = QLineEdit("you@example.com")
             url = QLineEdit("https://example.com")
             password_secret = QLineEdit("new-password-secret")
-            nordpass_csv = QLineEdit(str(user_state_dir("account-recovery-guard") / "nordpass-import.csv"))
+            nordpass_csv = QLineEdit(str(default_nordpass_import_csv_path()))
             write_preview = self._command_box()
 
             def update_write() -> None:
