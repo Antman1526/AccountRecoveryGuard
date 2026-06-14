@@ -300,6 +300,31 @@ def test_empty_scan_summary_next_safest_action_avoids_rotation_pressure():
     assert "monitoring" in summary.next_safest_action
 
 
+def test_scan_summary_interpretation_does_not_overstate_no_alerts():
+    summary = ScanSummary.from_findings([], discovered_count=8)
+
+    assert "No urgent alerts were found" in summary.interpretation
+    assert "does not prove every password is safe" in summary.interpretation
+    assert "free exposure check" in summary.interpretation
+
+
+def test_scan_summary_interpretation_requires_official_site_confirmation():
+    finding = CompromisedAccountFinding(
+        service_name="dropbox",
+        sender_domain="dropbox.com",
+        sender="security@dropbox.com",
+        subject="Suspicious login",
+        timestamp=datetime(2026, 6, 13, tzinfo=UTC),
+        severity="high",
+        reasons=["suspicious activity"],
+    )
+    summary = ScanSummary.from_findings([finding], discovered_count=1)
+
+    assert "mailbox risk signals" in summary.interpretation
+    assert "official website" in summary.interpretation
+    assert "before changing a password" in summary.interpretation
+
+
 def test_placeholder_scan_completion_enables_results_and_dashboard():
     state = GuiAppState.new().with_mail_provider(MailProviderChoice.GMAIL).start_scan()
 

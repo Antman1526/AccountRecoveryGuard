@@ -480,6 +480,7 @@ def main() -> int:
             card = Card("Next safest action")
             card.body.addWidget(StatusPill(account.risk_label, "attention" if account.risk_label == "Needs attention" else "safe"))
             card.body.addWidget(self._body_label(summary.next_safest_action))
+            card.body.addWidget(self._body_label(summary.interpretation, "listText"))
             reason_text = " ".join(account.reasons) if account.reasons else "This account has signals worth reviewing first."
             card.body.addWidget(self._body_label(f"Why: {reason_text}", "listText"))
             button_row = QHBoxLayout()
@@ -548,6 +549,8 @@ def main() -> int:
                         else "Scan results will appear here before any account-specific password guidance starts."
                     )
                 )
+                if summary:
+                    empty.body.addWidget(self._body_label(summary.interpretation, "listText"))
                 self.results_layout.addWidget(empty)
                 if summary is None:
                     self.results_layout.addStretch(1)

@@ -121,6 +121,18 @@ class ScanSummary:
             return f"Start with {service_name}. Review the alert, confirm the site, then rotate only that account first."
         return f"Review {service_name} first, then rotate only if the alert matches activity you do not recognize."
 
+    @property
+    def interpretation(self) -> str:
+        if self.accounts_needing_attention == 0:
+            return (
+                "No urgent alerts were found in the scanned mail. This does not prove every password is safe; "
+                "check any reused password with the free exposure check and keep passwords unique."
+            )
+        return (
+            "These are mailbox risk signals for prioritizing recovery. Confirm activity on the official website "
+            "or app before changing a password or updating vaults."
+        )
+
 
 @dataclass(frozen=True)
 class RotationSession:

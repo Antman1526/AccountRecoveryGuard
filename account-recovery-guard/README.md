@@ -277,6 +277,7 @@ The GUI opens to a guided first-run flow:
 - For personal Gmail, follow the in-app app-password steps; no Google OAuth JSON import file is needed unless you choose advanced setup.
 - Review scan consent and provider setup before scanning starts.
 - Review a clear next safest action plus the accounts needing attention found by the scan.
+- Interpret scan results safely: mailbox findings are risk signals, and "no urgent alerts" does not prove every password is safe.
 - Check one reused password directly from the Results or Dashboard screens with the free HIBP k-anonymous range check; the field is cleared after checking.
 - Use the password-exposure result to guide rotation without overstating certainty: if the checked password was found, rotate only accounts where you reused it, one at a time.
 - Open reset links only when they use HTTPS and match the expected service domain; otherwise use the official site or app manually.
