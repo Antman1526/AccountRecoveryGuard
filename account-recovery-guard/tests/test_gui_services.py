@@ -10,6 +10,7 @@ from account_recovery_guard.gui_services import (
     GuiVaultWriteResult,
     MailProviderSettings,
     SAFE_SCAN_FAILURE_MESSAGE,
+    SETUP_DETAIL_SCAN_CONSENT_REQUIRED,
     build_provider_or_error,
     controlled_setup_detail_for_log,
     describe_provider_setup,
@@ -253,6 +254,7 @@ def test_outlook_provider_factory_explains_missing_client_id():
 
 def test_setup_detail_logging_requires_exact_internal_code():
     assert controlled_setup_detail_for_log("missing_client_id") == "missing_client_id"
+    assert controlled_setup_detail_for_log(SETUP_DETAIL_SCAN_CONSENT_REQUIRED) == SETUP_DETAIL_SCAN_CONSENT_REQUIRED
     assert controlled_setup_detail_for_log("missing_client_id token=super-secret-value") == ""
     assert controlled_setup_detail_for_log("backend mentioned client_id but token=super-secret-value") == ""
 

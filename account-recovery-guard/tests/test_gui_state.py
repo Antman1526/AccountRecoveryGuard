@@ -160,6 +160,7 @@ def test_consent_copy_explains_local_scan_boundaries():
     assert "what we scan" in summary
     assert "one mailbox at a time" in summary
     assert "second person" in summary
+    assert "asked you to help" in summary
     assert "never log" in summary
     assert "local" in summary
 

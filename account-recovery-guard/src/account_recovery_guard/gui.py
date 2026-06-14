@@ -59,6 +59,7 @@ def main() -> int:
         MailProviderSettings,
         SETUP_DETAIL_MISSING_PROVIDER,
         SETUP_DETAIL_MISSING_PROVIDER_INSTANCE,
+        SETUP_DETAIL_SCAN_CONSENT_REQUIRED,
         SETUP_DETAIL_SCAN_FAILED,
         build_provider_or_error,
         controlled_setup_detail_for_log,
@@ -284,6 +285,21 @@ def main() -> int:
             self.setup_gmail_advanced_oauth.stateChanged.connect(lambda: self._update_provider_setup_visibility())
             layout.addWidget(setup)
 
+            consent_confirm = Card("Permission to scan")
+            self.setup_scan_consent = QCheckBox(
+                "I have permission to scan this mailbox and use the results to protect this person."
+            )
+            self.setup_scan_consent.setObjectName("consentCheck")
+            self.setup_scan_consent.setCursor(Qt.CursorShape.PointingHandCursor)
+            consent_confirm.body.addWidget(self.setup_scan_consent)
+            consent_confirm.body.addWidget(
+                self._body_label(
+                    "For a second person, only continue when they are present and asked you to help.",
+                    "listText",
+                )
+            )
+            layout.addWidget(consent_confirm)
+
             button_row = QHBoxLayout()
             back = QPushButton("Back")
             back.setObjectName("secondaryButton")
@@ -306,6 +322,12 @@ def main() -> int:
                 self.setup_error_label.setVisible(False)
             if self.state.mail_provider is None:
                 self._show_user_error("Choose a mail provider before starting the scan.", SETUP_DETAIL_MISSING_PROVIDER)
+                return
+            if not getattr(self, "setup_scan_consent", None) or not self.setup_scan_consent.isChecked():
+                self._show_user_error(
+                    "Confirm you have permission to scan this mailbox before starting.",
+                    SETUP_DETAIL_SCAN_CONSENT_REQUIRED,
+                )
                 return
             self.state = self.state.with_scan_owner(self.setup_person_label.text(), self.setup_username.text())
             settings = MailProviderSettings(
