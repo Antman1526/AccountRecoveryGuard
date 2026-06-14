@@ -70,6 +70,8 @@ Current code ships IMAP plus optional OAuth adapters:
 
 The `breach-check` command integrates with Have I Been Pwned (HIBP) for account-level breach checks. HIBP breached-account checks require an API key and send the searched email address to HIBP. This is the optional paid path. The tool stores the HIBP key in the OS credential store and logs only breach counts, not the API key.
 
+The default exposure workflow is free-only. `exposure-plan` will not run the paid HIBP email-breach lookup unless you pass both `--hibp-secret` and `--allow-paid-email-lookup`.
+
 This tells you whether the email address appeared in known breach datasets. It does not prove that every linked service account is compromised, and it cannot detect private breaches HIBP does not have.
 
 The `pwned-password` command uses the free HIBP Pwned Passwords k-anonymity range API. It does not require a HIBP API key. Only the first five SHA-1 hash characters are sent to HIBP; the plaintext password is read from the OS credential store and is never logged.
@@ -202,10 +204,10 @@ Install NordPass desktop or use the NordPass web vault. Import/export remains ma
 
 For Gmail personal accounts, use a Google app password instead of your normal Google password. In the GUI, choose Gmail, enter your Gmail address, paste the 16-character app password, and leave "Scan full Gmail mailbox" enabled.
 
-For the CLI:
+For the CLI, omit the secret value so the app prompts for hidden input instead of saving it in shell history.
 
 ```bash
-arg secret gmail-app-password-you@gmail.com "YOUR_16_CHARACTER_GOOGLE_APP_PASSWORD"
+arg secret gmail-app-password-you@gmail.com
 arg scan-gmail-app-password --username you@gmail.com --secret-name gmail-app-password-you@gmail.com
 ```
 
@@ -218,7 +220,7 @@ arg scan-gmail-app-password --username you@gmail.com --secret-name gmail-app-pas
 For generic IMAP:
 
 ```bash
-arg secret gmail-imap-app-password "YOUR_APP_PASSWORD"
+arg secret gmail-imap-app-password
 arg scan-imap --host imap.gmail.com --username you@gmail.com --secret-name gmail-imap-app-password --days 30
 ```
 
@@ -302,14 +304,14 @@ This labels local free setup as `ready` or `action_needed`, and labels paid-only
 Optional paid lookup: check an email address against Have I Been Pwned:
 
 ```bash
-arg secret hibp-api-key "YOUR_HIBP_API_KEY"
+arg secret hibp-api-key
 arg breach-check --email you@example.com --hibp-secret hibp-api-key
 ```
 
-Check a candidate password against HIBP Pwned Passwords:
+Check an old or reused password against HIBP Pwned Passwords. Omit the value so it is entered at the hidden prompt:
 
 ```bash
-arg secret candidate-password "PASTE_CANDIDATE"
+arg secret candidate-password
 arg pwned-password --password-secret candidate-password
 ```
 
@@ -325,12 +327,13 @@ arg exposure-plan \
   --findings-json findings.json
 ```
 
-Stay on the free path by omitting `--hibp-secret`. Add the optional paid HIBP email-breach lookup only after you have a HIBP API key:
+Stay on the free path by omitting `--hibp-secret`. Add the optional paid HIBP email-breach lookup only after you have a HIBP API key and you accept that the searched email address is sent to HIBP:
 
 ```bash
 arg exposure-plan \
   --email you@example.com \
   --hibp-secret hibp-api-key \
+  --allow-paid-email-lookup \
   --password-secret candidate-password \
   --accounts-json accounts.json \
   --findings-json findings.json
@@ -352,10 +355,10 @@ arg rotate \
 
 The command shows five masked generated passwords, reveals only the one you choose, opens the reset link if requested, waits for you to complete MFA/CAPTCHA/passkey prompts manually, then only writes vaults after you type `ROTATED`.
 
-Store a generated password in the OS credential store:
+Store a generated password in the OS credential store. Omit the value so it is entered at the hidden prompt:
 
 ```bash
-arg secret new-example-password "PASTE_GENERATED_PASSWORD"
+arg secret new-example-password
 ```
 
 Write to Bitwarden and stage NordPass import:

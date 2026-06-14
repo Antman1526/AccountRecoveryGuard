@@ -1,7 +1,9 @@
 from __future__ import annotations
 
 import argparse
+import getpass
 import json
+import sys
 from pathlib import Path
 from urllib.parse import urlsplit, urlunsplit
 
@@ -31,7 +33,12 @@ def main() -> None:
 
     secret = sub.add_parser("secret", help="Store an OS-keychain secret")
     secret.add_argument("name")
-    secret.add_argument("value")
+    secret.add_argument(
+        "value",
+        nargs="?",
+        help="Secret value. Safer: omit this and enter the secret at the hidden prompt.",
+    )
+    secret.add_argument("--stdin", action="store_true", help="Read the secret value from stdin for scripted setup")
 
     sub.add_parser("gui", help="Launch the desktop dashboard")
 
@@ -97,6 +104,11 @@ def main() -> None:
     )
     exposure.add_argument("--email", required=True)
     exposure.add_argument("--hibp-secret", help="Optional OS-keychain secret containing a paid HIBP key for email breach lookup")
+    exposure.add_argument(
+        "--allow-paid-email-lookup",
+        action="store_true",
+        help="Required with --hibp-secret because HIBP account breach lookup is paid and sends the email address to HIBP",
+    )
     exposure.add_argument("--password-secret", help="Optional OS-keychain secret containing a password to check with HIBP k-anonymity")
     exposure.add_argument("--accounts-json", help="Optional JSON output from discover-imap")
     exposure.add_argument("--findings-json", help="Optional JSON output from scan-imap, scan-gmail-app-password, scan-gmail, or scan-graph")
@@ -159,7 +171,7 @@ def main() -> None:
 
     args = parser.parse_args()
     if args.command == "secret":
-        _set_secret(args.name, args.value)
+        _set_secret(args.name, _secret_value_from_args(args))
         print(f"Stored secret '{args.name}' in the OS credential store.")
     elif args.command == "gui":
         raise SystemExit(gui_main())
@@ -223,10 +235,24 @@ def _set_secret(name: str, value: str) -> None:
     set_secret(name, value)
 
 
+def _secret_value_from_args(args: argparse.Namespace) -> str:
+    if args.stdin and args.value is not None:
+        raise SystemExit("Use either a positional secret value or --stdin, not both.")
+    if args.stdin:
+        value = sys.stdin.read().rstrip("\n")
+    elif args.value is not None:
+        value = args.value
+    else:
+        value = getpass.getpass("Secret value (input hidden): ")
+    if not value:
+        raise SystemExit("Secret value cannot be empty.")
+    return value
+
+
 def _scan_imap(args: argparse.Namespace) -> None:
     password = get_secret(args.secret_name)
     if not password:
-        raise SystemExit(f"Secret '{args.secret_name}' was not found. Store it with: arg secret {args.secret_name} <value>")
+        raise SystemExit(f"Secret '{args.secret_name}' was not found. Store it with: arg secret {args.secret_name}")
     findings = ImapEmailScanner(
         ImapMailboxConfig(
             host=args.host,
@@ -312,7 +338,7 @@ def _scan_gmail_app_password(args: argparse.Namespace) -> None:
     if not password:
         raise SystemExit(
             f"Secret '{args.secret_name}' was not found. Store a Google app password with: "
-            f"arg secret {args.secret_name} <16-character-app-password>"
+            f"arg secret {args.secret_name}"
         )
     scanner = ImapEmailScanner(
         ImapMailboxConfig(
@@ -368,6 +394,11 @@ def _exposure_plan(args: argparse.Namespace) -> None:
     breaches = []
     email_breach_lookup_status = "not_run"
     if args.hibp_secret:
+        if not args.allow_paid_email_lookup:
+            raise SystemExit(
+                "Free-only mode: omit --hibp-secret, or add --allow-paid-email-lookup after you decide to use "
+                "the paid HIBP email-breach lookup. The free password check does not need this."
+            )
         api_key = get_secret(args.hibp_secret)
         if not api_key:
             raise SystemExit(f"Secret '{args.hibp_secret}' was not found.")
