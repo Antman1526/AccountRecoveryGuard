@@ -37,9 +37,14 @@ def main() -> None:
     secret.add_argument(
         "value",
         nargs="?",
-        help="Secret value. Safer: omit this and enter the secret at the hidden prompt.",
+        help="Secret value. Unsafe by default because it can be saved in shell history.",
     )
     secret.add_argument("--stdin", action="store_true", help="Read the secret value from stdin for scripted setup")
+    secret.add_argument(
+        "--allow-shell-history-secret",
+        action="store_true",
+        help="Allow a positional secret value even though it may be saved in shell history",
+    )
 
     sub.add_parser("gui", help="Launch the desktop dashboard")
 
@@ -251,6 +256,12 @@ def _secret_value_from_args(args: argparse.Namespace) -> str:
     if args.stdin:
         value = sys.stdin.read().rstrip("\n")
     elif args.value is not None:
+        if not getattr(args, "allow_shell_history_secret", False):
+            raise SystemExit(
+                "Refusing to read a secret from the command line because it may be saved in shell history. "
+                "Omit the value for a hidden prompt, use --stdin for scripted setup, or add "
+                "--allow-shell-history-secret if you accept that risk."
+            )
         value = args.value
     else:
         value = getpass.getpass("Secret value (input hidden): ")

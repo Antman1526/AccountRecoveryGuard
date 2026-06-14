@@ -205,7 +205,7 @@ Install NordPass desktop or use the NordPass web vault. Import/export remains ma
 
 For Gmail personal accounts, use a Google app password instead of your normal Google password. In the GUI, choose Gmail, enter your Gmail address, paste the 16-character app password, and leave "Scan full Gmail mailbox" enabled.
 
-For the CLI, omit the secret value so the app prompts for hidden input instead of saving it in shell history.
+For the CLI, omit the secret value so the app prompts for hidden input instead of saving it in shell history. The `secret` command refuses positional secret values unless you explicitly add `--allow-shell-history-secret`.
 
 ```bash
 arg secret gmail-app-password-you@gmail.com

@@ -63,7 +63,7 @@ def test_malformed_reset_link_display_is_not_echoed() -> None:
 def test_secret_value_uses_hidden_prompt_when_value_is_omitted(monkeypatch) -> None:
     monkeypatch.setattr(cli.getpass, "getpass", lambda prompt: "prompt-secret")
 
-    value = _secret_value_from_args(argparse.Namespace(value=None, stdin=False))
+    value = _secret_value_from_args(argparse.Namespace(value=None, stdin=False, allow_shell_history_secret=False))
 
     assert value == "prompt-secret"
 
@@ -71,21 +71,40 @@ def test_secret_value_uses_hidden_prompt_when_value_is_omitted(monkeypatch) -> N
 def test_secret_value_can_read_from_stdin_without_shell_history(monkeypatch) -> None:
     monkeypatch.setattr(cli.sys, "stdin", io.StringIO("stdin-secret\n"))
 
-    value = _secret_value_from_args(argparse.Namespace(value=None, stdin=True))
+    value = _secret_value_from_args(argparse.Namespace(value=None, stdin=True, allow_shell_history_secret=False))
 
     assert value == "stdin-secret"
 
 
 def test_secret_value_rejects_ambiguous_sources() -> None:
     with pytest.raises(SystemExit):
-        _secret_value_from_args(argparse.Namespace(value="positional-secret", stdin=True))
+        _secret_value_from_args(
+            argparse.Namespace(value="positional-secret", stdin=True, allow_shell_history_secret=True)
+        )
+
+
+def test_secret_value_rejects_positional_secret_without_shell_history_opt_in() -> None:
+    with pytest.raises(SystemExit) as exc:
+        _secret_value_from_args(
+            argparse.Namespace(value="positional-secret", stdin=False, allow_shell_history_secret=False)
+        )
+
+    assert "shell history" in str(exc.value)
+
+
+def test_secret_value_allows_positional_secret_with_explicit_shell_history_opt_in() -> None:
+    value = _secret_value_from_args(
+        argparse.Namespace(value="positional-secret", stdin=False, allow_shell_history_secret=True)
+    )
+
+    assert value == "positional-secret"
 
 
 def test_secret_value_rejects_empty_prompt(monkeypatch) -> None:
     monkeypatch.setattr(cli.getpass, "getpass", lambda prompt: "")
 
     with pytest.raises(SystemExit):
-        _secret_value_from_args(argparse.Namespace(value=None, stdin=False))
+        _secret_value_from_args(argparse.Namespace(value=None, stdin=False, allow_shell_history_secret=False))
 
 
 def test_exposure_plan_blocks_paid_email_lookup_without_explicit_opt_in() -> None:
