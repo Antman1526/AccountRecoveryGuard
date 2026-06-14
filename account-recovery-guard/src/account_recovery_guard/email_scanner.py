@@ -9,6 +9,7 @@ from email.message import EmailMessage, Message
 from email.utils import parsedate_to_datetime, parseaddr
 from html import unescape
 from typing import Iterable
+from urllib.parse import urlparse
 
 from bs4 import BeautifulSoup
 
@@ -135,13 +136,42 @@ def extract_body(message: Message) -> str:
             html_chunks.append(decoded)
 
     if text_chunks:
-        return "\n".join(text_chunks)
+        return "\n".join(text_chunks + _html_link_chunks(html_chunks))
     if html_chunks:
-        soup = BeautifulSoup("\n".join(html_chunks), "html.parser")
-        return unescape(soup.get_text("\n"))
+        return "\n".join(_html_text_and_link_chunks(html_chunks))
     if isinstance(message, EmailMessage):
         return str(message.get_content())
     return str(message.get_payload())
+
+
+def _html_text_and_link_chunks(html_chunks: list[str]) -> list[str]:
+    soup = BeautifulSoup("\n".join(html_chunks), "html.parser")
+    chunks = [unescape(soup.get_text("\n"))]
+    chunks.extend(_safe_html_links(soup))
+    return chunks
+
+
+def _html_link_chunks(html_chunks: list[str]) -> list[str]:
+    if not html_chunks:
+        return []
+    soup = BeautifulSoup("\n".join(html_chunks), "html.parser")
+    return _safe_html_links(soup)
+
+
+def _safe_html_links(soup: BeautifulSoup) -> list[str]:
+    links: list[str] = []
+    seen: set[str] = set()
+    for tag in soup.find_all("a", href=True):
+        href = str(tag.get("href", "")).strip()
+        parsed = urlparse(href)
+        if parsed.scheme.lower() not in {"http", "https"} or not parsed.netloc:
+            continue
+        safe_href = href[:2048]
+        if safe_href in seen:
+            continue
+        seen.add(safe_href)
+        links.append(safe_href)
+    return links
 
 
 def extract_reset_link(body: str) -> str | None:
