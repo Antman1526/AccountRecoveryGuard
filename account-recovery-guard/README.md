@@ -125,7 +125,7 @@ Secrets:
 MFA:
 
 - The tool never bypasses MFA, CAPTCHA, device approval, or risk checks.
-- Playwright only opens an extracted reset link in a visible browser for manual completion.
+- Playwright only opens an extracted reset link in a visible browser for manual completion, and that recovery browser session blocks common installer, archive, and script downloads.
 - You remain responsible for confirming the domain before entering a generated password.
 - The `rotate` command requires you to type `ROTATED` before vault writes so the vault does not get ahead of the real account state.
 - `rotate` masks the five generated choices by default and reveals only the selected password. `--copy-selected` copies it to the clipboard and schedules clipboard clearing after 60 seconds when the platform supports it.
@@ -294,6 +294,7 @@ The GUI opens to a guided first-run flow:
 - Avoid sending the same password check repeatedly in one app session; repeated checks reuse a local keyed fingerprint result instead of contacting HIBP again.
 - Use the password-exposure result to guide rotation without overstating certainty: if the checked password was found, rotate only accounts where you reused it, one at a time.
 - Open reset links only when they use HTTPS, match the expected service domain, and do not contain unsafe redirect targets; otherwise use the official site or app manually.
+- Block common recovery-session downloads such as installers, archives, scripts, and disk images when the optional Playwright reset helper is used.
 - Require confirmation that you are on the official site/app or verified reset page before copying a generated password.
 - Rotate passwords with masked choices, then prepare vault sync only after confirming the password was changed on the real service and the new password works.
 - Stage the NordPass import CSV from the guided rotation flow, import it immediately, verify, and delete it after use with the in-app cleanup button.
@@ -362,7 +363,7 @@ arg rotate \
   --copy-selected
 ```
 
-The command shows five masked generated passwords, reveals only the one you choose, opens the reset link if requested, waits for you to complete MFA/CAPTCHA/passkey prompts manually, then only writes vaults after you confirm the new password works and type `ROTATED`.
+The command shows five masked generated passwords, reveals only the one you choose, opens the reset link if requested in a no-download recovery browser, waits for you to complete MFA/CAPTCHA/passkey prompts manually, then only writes vaults after you confirm the new password works and type `ROTATED`.
 
 Store a generated password in the OS credential store. Omit the value so it is entered at the hidden prompt:
 

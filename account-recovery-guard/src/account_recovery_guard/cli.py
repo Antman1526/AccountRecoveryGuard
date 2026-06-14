@@ -21,7 +21,7 @@ from .passkeys import passkey_guidance
 from .passwords import PasswordPolicy, fingerprint_password, generate_passphrase, generate_password
 from .paths import user_state_dir
 from .readiness import build_readiness_checks
-from .reset_orchestrator import PasswordResetOrchestrator, open_reset_link
+from .reset_orchestrator import PasswordResetOrchestrator, ResetLinkSafetyError, open_reset_link
 from .rotation import build_rotation_choices, summarize_rotation_choices
 from .secure_files import default_nordpass_import_csv_path, delete_file, plaintext_file_warning
 from .sync import build_vault_dashboard, compare_vault_entries
@@ -450,7 +450,7 @@ def _workflow(args: argparse.Namespace) -> None:
     for index, step in enumerate(plan.steps, start=1):
         print(f"{index}. {step}")
     if args.open and plan.reset_link and plan.automation_available:
-        open_reset_link(plan.reset_link)
+        _open_reset_link_or_exit(plan.reset_link, finding.sender_domain)
     elif args.open and plan.reset_link:
         print("Reset link was not opened because it failed safety checks. Use the official site or app instead.")
 
@@ -480,7 +480,7 @@ def _rotate(args: argparse.Namespace) -> None:
     else:
         print(f"Selected password: {selected.password}")
     if args.open and args.reset_link and safe_reset_link_matches_domain(args.reset_link, args.url):
-        open_reset_link(args.reset_link)
+        _open_reset_link_or_exit(args.reset_link, args.url)
     elif args.open and args.reset_link:
         print("Reset link was not opened because it failed safety checks. Use the official site or app instead.")
     confirmation = input(
@@ -496,6 +496,13 @@ def _rotate(args: argparse.Namespace) -> None:
     AuditLogger().write("nordpass_import_staged", service=args.service, username=args.username, path=str(csv_path))
     print(f"NordPass import CSV staged at: {csv_path}")
     print("Import the CSV into NordPass, export NordPass, then run verify-sync.")
+
+
+def _open_reset_link_or_exit(reset_link: str, expected_domain_or_url: str | None) -> None:
+    try:
+        open_reset_link(reset_link, expected_domain_or_url)
+    except ResetLinkSafetyError as exc:
+        raise SystemExit(f"Reset link was not opened: {exc} Use the official site or app instead.") from exc
 
 
 def _write_vaults(args: argparse.Namespace) -> None:

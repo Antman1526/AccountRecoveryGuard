@@ -1,5 +1,12 @@
+import pytest
+
 from account_recovery_guard.models import CompromisedAccountFinding
-from account_recovery_guard.reset_orchestrator import PasswordResetOrchestrator
+from account_recovery_guard.reset_orchestrator import (
+    PasswordResetOrchestrator,
+    ResetLinkSafetyError,
+    is_blocked_recovery_download_url,
+    validate_browser_reset_link,
+)
 
 
 def _finding(reset_link: str) -> CompromisedAccountFinding:
@@ -29,3 +36,34 @@ def test_workflow_blocks_unsafe_redirect_reset_link_automation():
 
     assert workflow.automation_available is False
     assert "failed safety checks" in workflow.steps[0]
+
+
+def test_browser_reset_link_validation_allows_expected_https_domain():
+    link = validate_browser_reset_link("https://example.com/reset", "example.com")
+
+    assert link == "https://example.com/reset"
+
+
+def test_browser_reset_link_validation_rejects_http_link():
+    with pytest.raises(ResetLinkSafetyError):
+        validate_browser_reset_link("http://example.com/reset", "example.com")
+
+
+def test_browser_reset_link_validation_rejects_embedded_credentials():
+    with pytest.raises(ResetLinkSafetyError):
+        validate_browser_reset_link("https://example.com@evil.test/reset", "example.com")
+
+
+def test_browser_reset_link_validation_rejects_unsafe_redirect():
+    with pytest.raises(ResetLinkSafetyError):
+        validate_browser_reset_link(
+            "https://example.com/reset?next=https%3A%2F%2Fevil.test%2Fsteal",
+            "example.com",
+        )
+
+
+def test_recovery_browser_blocks_common_malware_download_urls():
+    assert is_blocked_recovery_download_url("https://example.com/download/security-update.exe") is True
+    assert is_blocked_recovery_download_url("https://example.com/files/recovery%20tool.pkg") is True
+    assert is_blocked_recovery_download_url("https://example.com/archive/reset-kit.zip?token=abc") is True
+    assert is_blocked_recovery_download_url("https://example.com/account/reset") is False

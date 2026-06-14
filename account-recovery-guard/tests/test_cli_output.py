@@ -15,11 +15,13 @@ from account_recovery_guard.cli import (
     _breach_check,
     _csv_status,
     _exposure_plan,
+    _open_reset_link_or_exit,
     _print_findings,
     _redact_url_for_display,
     _secret_value_from_args,
 )
 from account_recovery_guard.models import CompromisedAccountFinding
+from account_recovery_guard.reset_orchestrator import ResetLinkSafetyError
 
 
 def _finding() -> CompromisedAccountFinding:
@@ -162,6 +164,19 @@ def test_breach_check_allows_paid_lookup_after_explicit_opt_in(monkeypatch, caps
 
     data = json.loads(capsys.readouterr().out)
     assert data["breaches"] == [{"name": "ExampleBreach"}]
+
+
+def test_open_reset_link_or_exit_hides_low_level_safety_error(monkeypatch) -> None:
+    def raise_safety_error(reset_link, expected_domain_or_url):
+        raise ResetLinkSafetyError("embedded credentials")
+
+    monkeypatch.setattr(cli, "open_reset_link", raise_safety_error)
+
+    with pytest.raises(SystemExit) as exc:
+        _open_reset_link_or_exit("https://example.com@evil.test/reset", "example.com")
+
+    assert "Reset link was not opened" in str(exc.value)
+    assert "official site or app" in str(exc.value)
 
 
 def test_csv_status_defaults_to_staged_nordpass_path(tmp_path, monkeypatch, capsys) -> None:
