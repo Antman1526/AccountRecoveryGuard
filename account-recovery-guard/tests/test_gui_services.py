@@ -11,6 +11,7 @@ from account_recovery_guard.gui_services import (
     MailProviderSettings,
     SAFE_SCAN_FAILURE_MESSAGE,
     SETUP_DETAIL_SCAN_CONSENT_REQUIRED,
+    SETUP_DETAIL_SECOND_PERSON_CONSENT_REQUIRED,
     build_provider_or_error,
     controlled_setup_detail_for_log,
     describe_provider_setup,
@@ -341,6 +342,11 @@ def test_scan_failure_message_is_generic_for_user_display():
         assert unsafe_example not in SAFE_SCAN_FAILURE_MESSAGE
     assert "ya29.secret-token" not in SAFE_SCAN_FAILURE_MESSAGE
     assert "hunter2" not in SAFE_SCAN_FAILURE_MESSAGE
+
+
+def test_second_person_consent_detail_is_controlled_for_logging():
+    assert controlled_setup_detail_for_log(SETUP_DETAIL_SECOND_PERSON_CONSENT_REQUIRED) == SETUP_DETAIL_SECOND_PERSON_CONSENT_REQUIRED
+    assert controlled_setup_detail_for_log("second person token=secret") == ""
 
 
 def test_rotation_service_builds_five_choices_for_account():

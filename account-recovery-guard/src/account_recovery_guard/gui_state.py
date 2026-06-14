@@ -216,6 +216,10 @@ class GuiAppState:
         return f"{self.protected_person_label}: "
 
     @property
+    def requires_second_person_consent(self) -> bool:
+        return requires_second_person_consent(self.protected_person_label)
+
+    @property
     def scan_username(self) -> str:
         return self.mailbox_username or "you@example.com"
 
@@ -354,6 +358,10 @@ def _normalize_person_label(label: str) -> str:
     if not normalized:
         return "Me"
     return normalized[:40]
+
+
+def requires_second_person_consent(label: str) -> bool:
+    return _normalize_person_label(label).casefold() != "me"
 
 
 def _normalize_mailbox_username(username: str) -> str:

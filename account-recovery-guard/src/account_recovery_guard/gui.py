@@ -64,6 +64,7 @@ def main() -> int:
         SETUP_DETAIL_MISSING_PROVIDER_INSTANCE,
         SETUP_DETAIL_SCAN_CONSENT_REQUIRED,
         SETUP_DETAIL_SCAN_FAILED,
+        SETUP_DETAIL_SECOND_PERSON_CONSENT_REQUIRED,
         build_provider_or_error,
         controlled_setup_detail_for_log,
         describe_provider_setup,
@@ -73,7 +74,7 @@ def main() -> int:
         scan_progress_stages,
         visible_setup_fields,
     )
-    from .gui_state import AccountReview, GuiAppState, MailProviderChoice, ScanSummary, VaultSyncStatus
+    from .gui_state import AccountReview, GuiAppState, MailProviderChoice, ScanSummary, VaultSyncStatus, requires_second_person_consent
     from .gui_workers import PasswordExposureWorker, ScanWorker
     from .vaults import BitwardenVault
 
@@ -253,6 +254,7 @@ def main() -> int:
             form.setVerticalSpacing(10)
             self.setup_person_label = QLineEdit(self.state.protected_person_label)
             self.setup_person_label.setPlaceholderText("Me, spouse, parent")
+            self.setup_person_label.textChanged.connect(lambda: self._update_second_person_consent_visibility())
             self.setup_username = QLineEdit("")
             self.setup_username.setPlaceholderText("you@example.com")
             self.setup_days_back = QSpinBox()
@@ -328,6 +330,12 @@ def main() -> int:
             self.setup_scan_consent.setObjectName("consentCheck")
             self.setup_scan_consent.setCursor(Qt.CursorShape.PointingHandCursor)
             consent_confirm.body.addWidget(self.setup_scan_consent)
+            self.setup_second_person_consent = QCheckBox(
+                "This person is present and asked me to help with this mailbox."
+            )
+            self.setup_second_person_consent.setObjectName("consentCheck")
+            self.setup_second_person_consent.setCursor(Qt.CursorShape.PointingHandCursor)
+            consent_confirm.body.addWidget(self.setup_second_person_consent)
             consent_confirm.body.addWidget(
                 self._body_label(
                     "For a second person, only continue when they are present and asked you to help.",
@@ -351,6 +359,7 @@ def main() -> int:
             layout.addLayout(button_row)
             layout.addStretch(1)
             self._update_provider_setup_visibility()
+            self._update_second_person_consent_visibility()
             return page
 
         def _start_scan_from_consent(self) -> None:
@@ -363,6 +372,15 @@ def main() -> int:
                 self._show_user_error(
                     "Confirm you have permission to scan this mailbox before starting.",
                     SETUP_DETAIL_SCAN_CONSENT_REQUIRED,
+                )
+                return
+            if requires_second_person_consent(self.setup_person_label.text()) and (
+                not getattr(self, "setup_second_person_consent", None)
+                or not self.setup_second_person_consent.isChecked()
+            ):
+                self._show_user_error(
+                    "Confirm the second person is present and asked you to help before scanning their mailbox.",
+                    SETUP_DETAIL_SECOND_PERSON_CONSENT_REQUIRED,
                 )
                 return
             self.state = self.state.with_scan_owner(self.setup_person_label.text(), self.setup_username.text())
@@ -416,6 +434,14 @@ def main() -> int:
             worker.failed.connect(thread.quit)
             thread.finished.connect(thread.deleteLater)
             thread.start()
+
+        def _update_second_person_consent_visibility(self) -> None:
+            if not hasattr(self, "setup_second_person_consent"):
+                return
+            required = requires_second_person_consent(self.setup_person_label.text())
+            self.setup_second_person_consent.setVisible(required)
+            if not required:
+                self.setup_second_person_consent.setChecked(False)
 
         def _update_provider_setup_visibility(self) -> None:
             if not hasattr(self, "setup_field_rows"):

@@ -275,6 +275,7 @@ The GUI opens to a guided first-run flow:
 - See the safe recovery boundary on first launch: authorized mailbox evidence plus free HIBP k-anonymous checks, not unsafe whole-web or dark-web crawling.
 - Label who the scan is for, using quick choices like `Me` or `Second person`, without creating a stored profile.
 - Protect one mailbox at a time; run a separate scan for a second person only when they are present and have asked you to help.
+- Require an extra in-app confirmation before scanning a mailbox labeled for someone other than `Me`.
 - Connect Gmail, Outlook, or Other Email.
 - See only the provider setup fields that apply to the selected provider.
 - For personal Gmail, follow the in-app app-password steps; no Google OAuth JSON import file is needed unless you choose advanced setup.

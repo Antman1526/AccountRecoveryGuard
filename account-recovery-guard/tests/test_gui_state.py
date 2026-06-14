@@ -8,6 +8,7 @@ from account_recovery_guard.gui_state import (
     RotationSession,
     ScanSummary,
     VaultSyncStatus,
+    requires_second_person_consent,
 )
 from account_recovery_guard.models import CompromisedAccountFinding, PasswordCandidate
 
@@ -133,6 +134,15 @@ def test_blank_protected_person_label_defaults_to_me():
     state = GuiAppState.new().with_protected_person("   ")
 
     assert state.protected_person_label == "Me"
+
+
+def test_second_person_consent_is_required_only_for_non_me_labels():
+    assert requires_second_person_consent("Me") is False
+    assert requires_second_person_consent("  me  ") is False
+    assert requires_second_person_consent("") is False
+    assert requires_second_person_consent("Second person") is True
+    assert requires_second_person_consent("spouse mailbox") is True
+    assert GuiAppState.new().with_protected_person("spouse mailbox").requires_second_person_consent is True
 
 
 def test_long_protected_person_label_is_bounded():
