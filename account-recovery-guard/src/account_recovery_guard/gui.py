@@ -58,6 +58,7 @@ def main() -> int:
         controlled_setup_detail_for_log,
         describe_provider_setup,
         provider_setup_note,
+        provider_setup_steps,
         scan_progress_stages,
         visible_setup_fields,
     )
@@ -267,6 +268,8 @@ def main() -> int:
             )
             self.setup_provider_note = self._body_label("", "listText")
             setup.body.addWidget(self.setup_provider_note)
+            self.setup_steps_card = Card("Connection steps")
+            setup.body.addWidget(self.setup_steps_card)
             self.setup_gmail_advanced_oauth.stateChanged.connect(lambda: self._update_provider_setup_visibility())
             layout.addWidget(setup)
 
@@ -367,6 +370,19 @@ def main() -> int:
                         else False,
                     )
                 )
+            if hasattr(self, "setup_steps_card"):
+                self._clear_layout(self.setup_steps_card.body)
+                title = QLabel("Connection steps")
+                title.setObjectName("sectionTitle")
+                self.setup_steps_card.body.addWidget(title)
+                steps = provider_setup_steps(
+                    self.state.mail_provider,
+                    self.setup_gmail_advanced_oauth.isChecked()
+                    if hasattr(self, "setup_gmail_advanced_oauth")
+                    else False,
+                )
+                for index, step in enumerate(steps, start=1):
+                    self.setup_steps_card.body.addWidget(self._body_label(f"{index}. {step}", "listText"))
 
         def _show_user_error(self, message: str, technical_details: str) -> None:
             if hasattr(self, "setup_error_label"):

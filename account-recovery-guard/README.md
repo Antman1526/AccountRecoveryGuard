@@ -273,6 +273,7 @@ The GUI opens to a guided first-run flow:
 - Protect one mailbox at a time; run a separate scan for a second person only when they are present and have asked you to help.
 - Connect Gmail, Outlook, or Other Email.
 - See only the provider setup fields that apply to the selected provider.
+- For personal Gmail, follow the in-app app-password steps; no Google OAuth JSON import file is needed unless you choose advanced setup.
 - Review scan consent and provider setup before scanning starts.
 - Review a clear next safest action plus the accounts needing attention found by the scan.
 - Check one reused password directly from the Results or Dashboard screens with the free HIBP k-anonymous range check; the field is cleared after checking.

@@ -189,6 +189,37 @@ def provider_setup_note(provider: MailProviderChoice | None, gmail_advanced_oaut
     return "Choose Gmail, Outlook, or Other Email to see only the setup fields needed for that provider."
 
 
+def provider_setup_steps(provider: MailProviderChoice | None, gmail_advanced_oauth: bool = False) -> tuple[str, ...]:
+    if provider == MailProviderChoice.GMAIL:
+        if gmail_advanced_oauth:
+            return (
+                "Use advanced Gmail OAuth only when a personal Google app password is blocked.",
+                "Create the OAuth client JSON in your own Google Cloud project; do not download credentials from anyone else.",
+                "The app stores OAuth tokens in the OS credential store and never logs token values.",
+            )
+        return (
+            "Personal Gmail: use a Google app password. No JSON import file is needed.",
+            "Turn on Google 2-Step Verification, then create an app password for Mail.",
+            "Paste the 16-character app password here. Do not paste your normal Google password.",
+        )
+    if provider == MailProviderChoice.OUTLOOK:
+        return (
+            "Outlook uses Microsoft device-code sign-in with a free application client ID.",
+            "Do not paste your normal Outlook password into this app.",
+            "If the client ID step is confusing, start with Gmail or Other Email until Outlook setup is simplified.",
+        )
+    if provider == MailProviderChoice.OTHER_EMAIL:
+        return (
+            "Use this only when your provider supports IMAP app passwords or mail tokens.",
+            "Save the app password in the OS credential store first, then enter the secret name here.",
+            "Do not enter your normal mailbox password unless your provider explicitly requires a mail app password.",
+        )
+    return (
+        "Choose Gmail, Outlook, or Other Email.",
+        "Scan one mailbox at a time and only scan a second person when they are present and asked for help.",
+    )
+
+
 def build_provider_or_error(settings: MailProviderSettings) -> tuple[MailProvider | None, UserFacingSetupError | None]:
     if settings.provider == MailProviderChoice.GMAIL:
         client_secret_file = settings.gmail_client_secret_file.strip()

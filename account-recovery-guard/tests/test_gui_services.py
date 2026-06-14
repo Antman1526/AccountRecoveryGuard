@@ -14,6 +14,7 @@ from account_recovery_guard.gui_services import (
     controlled_setup_detail_for_log,
     describe_provider_setup,
     provider_setup_note,
+    provider_setup_steps,
     scan_progress_stages,
     visible_setup_fields,
 )
@@ -115,6 +116,33 @@ def test_provider_setup_note_explains_safe_secret_handling():
     assert "normal Google password" in gmail_note
     assert "OS credential store" in gmail_note
     assert "OS credential store" in other_note
+
+
+def test_provider_setup_steps_explain_gmail_without_json_or_normal_password():
+    steps = provider_setup_steps(MailProviderChoice.GMAIL)
+    text = " ".join(steps)
+
+    assert "No JSON import file is needed" in text
+    assert "16-character app password" in text
+    assert "normal Google password" in text
+
+
+def test_provider_setup_steps_keep_advanced_oauth_explicit():
+    steps = provider_setup_steps(MailProviderChoice.GMAIL, gmail_advanced_oauth=True)
+    text = " ".join(steps)
+
+    assert "advanced Gmail OAuth" in text
+    assert "OAuth client JSON" in text
+    assert "token values" in text
+
+
+def test_provider_setup_steps_warn_outlook_and_other_email_about_normal_passwords():
+    outlook = " ".join(provider_setup_steps(MailProviderChoice.OUTLOOK))
+    other = " ".join(provider_setup_steps(MailProviderChoice.OTHER_EMAIL))
+
+    assert "normal Outlook password" in outlook
+    assert "normal mailbox password" in other
+    assert "OS credential store" in other
 
 
 def test_scan_progress_stages_are_plain_language():
