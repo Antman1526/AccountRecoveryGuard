@@ -3,6 +3,7 @@ from __future__ import annotations
 import argparse
 import json
 from pathlib import Path
+from urllib.parse import urlsplit, urlunsplit
 
 from .account_discovery import AccountDiscovery
 from .audit import AuditLogger
@@ -266,8 +267,21 @@ def _print_findings(findings, as_json: bool) -> None:
     for finding in findings:
         print(f"[{finding.severity}] {finding.service_name} via {finding.sender_domain}: {finding.subject}")
         if finding.reset_link:
-            print(f"  reset: {finding.reset_link}")
+            print(f"  reset: {_redact_url_for_display(finding.reset_link)}")
         print(f"  reasons: {', '.join(finding.reasons)}")
+
+
+def _redact_url_for_display(url: str) -> str:
+    parts = urlsplit(url)
+    if parts.scheme not in {"http", "https"} or not parts.netloc:
+        return "redacted reset link"
+
+    display = urlunsplit((parts.scheme, parts.netloc, parts.path, "", ""))
+    if parts.query:
+        display += "?<redacted>"
+    if parts.fragment:
+        display += "#<redacted>"
+    return display
 
 
 def _discover_imap(args: argparse.Namespace) -> None:
