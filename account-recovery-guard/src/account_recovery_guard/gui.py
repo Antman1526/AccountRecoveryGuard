@@ -87,6 +87,7 @@ def main() -> int:
             self._password_exposure_thread = None
             self._active_password_exposure_status = None
             self._active_password_exposure_button = None
+            self._password_exposure_service = GuiPasswordExposureService()
             self.setWindowTitle("Account Recovery Guard")
             self.resize(1180, 760)
             self.setMinimumSize(980, 660)
@@ -1688,7 +1689,7 @@ def main() -> int:
             if action_button is not None:
                 action_button.setEnabled(False)
             thread = QThread(self)
-            worker = PasswordExposureWorker(GuiPasswordExposureService(), password, confirmed_old_or_reused)
+            worker = PasswordExposureWorker(self._password_exposure_service, password, confirmed_old_or_reused)
             self._password_exposure_thread = thread
             self._password_exposure_worker = worker
             worker.moveToThread(thread)

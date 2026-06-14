@@ -60,8 +60,10 @@ class FakePwnedPasswordChecker:
         self.count = count
         self.failure = failure
         self.seen_password = None
+        self.call_count = 0
 
     def pwned_password_count(self, password):
+        self.call_count += 1
         self.seen_password = password
         if self.failure:
             raise RuntimeError("network failed password=hunter2")
@@ -372,6 +374,38 @@ def test_password_exposure_service_reports_not_found():
     assert result.rotation_recommended is False
     assert "not found" in result.user_message.lower()
     assert "unique-password" not in result.user_message
+
+
+def test_password_exposure_service_reuses_session_result_without_network_or_plaintext():
+    checker = FakePwnedPasswordChecker(count=12)
+    service = GuiPasswordExposureService(checker=checker, session_key=b"test-session-key")
+
+    first = service.check_password("hunter2", confirmed_old_or_reused=True)
+    second = service.check_password("hunter2", confirmed_old_or_reused=True)
+
+    assert checker.call_count == 1
+    assert first.count == 12
+    assert second.count == 12
+    assert second.rotation_recommended is True
+    assert second.technical_details == "password_exposure_duplicate_session_check"
+    assert "already checked" in second.user_message
+    assert "sent again" in second.user_message
+    assert "hunter2" not in second.user_message
+    assert "hunter2" not in repr(second)
+    assert "hunter2" not in repr(service)
+
+
+def test_password_exposure_session_fingerprint_is_keyed_and_not_plain_hash():
+    password = "hunter2"
+    first = GuiPasswordExposureService(checker=FakePwnedPasswordChecker(), session_key=b"first-key")
+    second = GuiPasswordExposureService(checker=FakePwnedPasswordChecker(), session_key=b"second-key")
+
+    first_fingerprint = first._session_fingerprint(password)
+    second_fingerprint = second._session_fingerprint(password)
+
+    assert first_fingerprint != second_fingerprint
+    assert password not in first_fingerprint
+    assert len(first_fingerprint) == 64
 
 
 def test_password_exposure_service_handles_empty_and_failure_without_secret_echo():

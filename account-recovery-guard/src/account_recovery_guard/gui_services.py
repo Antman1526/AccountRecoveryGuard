@@ -1,6 +1,9 @@
 from __future__ import annotations
 
+import hashlib
+import hmac
 import re
+import secrets
 from dataclasses import dataclass
 from email.message import Message
 from inspect import signature
@@ -434,8 +437,10 @@ class GuiRotationService:
 
 
 class GuiPasswordExposureService:
-    def __init__(self, checker: HibpBreachChecker | None = None) -> None:
+    def __init__(self, checker: HibpBreachChecker | None = None, session_key: bytes | None = None) -> None:
         self.checker = checker or HibpBreachChecker()
+        self._session_key = session_key or secrets.token_bytes(32)
+        self._checked_results: dict[str, GuiPasswordExposureResult] = {}
 
     def check_password(self, password: str, confirmed_old_or_reused: bool = False) -> GuiPasswordExposureResult:
         if not password:
@@ -452,6 +457,26 @@ class GuiPasswordExposureService:
                 ),
                 technical_details="password_exposure_confirmation_required",
             )
+        fingerprint = self._session_fingerprint(password)
+        previous_result = self._checked_results.get(fingerprint)
+        if previous_result is not None:
+            if previous_result.count and previous_result.count > 0:
+                previous_summary = (
+                    f"Previous result: found {previous_result.count} time(s). Rotate accounts where you reused it."
+                )
+            elif previous_result.count == 0:
+                previous_summary = "Previous result: not found in HIBP Pwned Passwords."
+            else:
+                previous_summary = "Previous result: no completed exposure count was stored."
+            return GuiPasswordExposureResult(
+                count=previous_result.count,
+                user_message=(
+                    "This password was already checked in this app session, so it was not sent again. "
+                    f"{previous_summary}"
+                ),
+                rotation_recommended=previous_result.rotation_recommended,
+                technical_details="password_exposure_duplicate_session_check",
+            )
         try:
             count = self.checker.pwned_password_count(password)
         except Exception:
@@ -461,7 +486,7 @@ class GuiPasswordExposureService:
                 technical_details="pwned_password_check_failed",
             )
         if count > 0:
-            return GuiPasswordExposureResult(
+            result = GuiPasswordExposureResult(
                 count=count,
                 user_message=(
                     f"This password appears {count} time(s) in HIBP Pwned Passwords. "
@@ -469,11 +494,18 @@ class GuiPasswordExposureService:
                 ),
                 rotation_recommended=True,
             )
-        return GuiPasswordExposureResult(
+            self._checked_results[fingerprint] = result
+            return result
+        result = GuiPasswordExposureResult(
             count=0,
             user_message="This password was not found in HIBP Pwned Passwords.",
             rotation_recommended=False,
         )
+        self._checked_results[fingerprint] = result
+        return result
+
+    def _session_fingerprint(self, password: str) -> str:
+        return hmac.new(self._session_key, password.encode("utf-8"), hashlib.sha256).hexdigest()
 
 
 class GuiVaultService:
