@@ -571,9 +571,11 @@ def main() -> int:
                 for line in (
                     "Open scan results and choose Review account to start account-specific rotation.",
                     "Generated passwords remain masked in this guided path.",
+                    self.state.password_exposure_rotation_guidance,
                     self.state.vault_status.primary_message,
                 ):
-                    guidance.body.addWidget(self._body_label(line, "listText"))
+                    if line:
+                        guidance.body.addWidget(self._body_label(line, "listText"))
                 if self.state.vault_status.requires_csv_cleanup:
                     guidance.body.addWidget(self._body_label(self.state.vault_status.cleanup_message, "listText"))
                 self.rotation_layout.addWidget(guidance)
@@ -607,6 +609,10 @@ def main() -> int:
                     "listText",
                 )
             )
+            if self.state.password_exposure_rotation_guidance:
+                choices_card.body.addWidget(
+                    self._body_label(self.state.password_exposure_rotation_guidance, "warningText")
+                )
             choices = QListWidget()
             choices.setObjectName("choiceList")
             choices.setMinimumHeight(178)
@@ -1283,8 +1289,6 @@ def main() -> int:
             exposure_box.setObjectName("group")
             exposure_layout = QGridLayout(exposure_box)
             exposure_email = QLineEdit("you@example.com")
-            exposure_hibp_secret = QLineEdit("")
-            exposure_hibp_secret.setPlaceholderText("Optional paid HIBP key secret")
             exposure_password_secret = QLineEdit("")
             exposure_password_secret.setPlaceholderText("Free password exposure check secret")
             exposure_accounts_json = QLineEdit("accounts.json")
@@ -1297,7 +1301,6 @@ def main() -> int:
                         "exposure-plan",
                         {
                             "email": exposure_email.text(),
-                            "hibp_secret": exposure_hibp_secret.text(),
                             "password_secret": exposure_password_secret.text(),
                             "accounts_json": exposure_accounts_json.text(),
                             "findings_json": exposure_findings_json.text(),
@@ -1308,7 +1311,6 @@ def main() -> int:
 
             for widget in (
                 exposure_email,
-                exposure_hibp_secret,
                 exposure_password_secret,
                 exposure_accounts_json,
                 exposure_findings_json,
@@ -1316,7 +1318,6 @@ def main() -> int:
                 widget.textChanged.connect(update_exposure_preview)
             exposure_fields = (
                 ("Email", exposure_email),
-                ("HIBP key secret", exposure_hibp_secret),
                 ("Password secret", exposure_password_secret),
                 ("Discovered accounts JSON", exposure_accounts_json),
                 ("Mailbox findings JSON", exposure_findings_json),
@@ -1328,11 +1329,18 @@ def main() -> int:
             exposure_note.setObjectName("listText")
             exposure_note.setWordWrap(True)
             exposure_layout.addWidget(exposure_note, len(exposure_fields), 0, 1, 2)
-            exposure_layout.addWidget(QLabel("Command"), len(exposure_fields) + 1, 0)
-            exposure_layout.addWidget(exposure_preview, len(exposure_fields) + 1, 1)
+            paid_note = QLabel(
+                "Free-only mode: this command does not include HIBP email-breach lookup. Add a paid HIBP key later "
+                "only if you decide the account-level breach lookup is worth it."
+            )
+            paid_note.setObjectName("warningText")
+            paid_note.setWordWrap(True)
+            exposure_layout.addWidget(paid_note, len(exposure_fields) + 1, 0, 1, 2)
+            exposure_layout.addWidget(QLabel("Command"), len(exposure_fields) + 2, 0)
+            exposure_layout.addWidget(exposure_preview, len(exposure_fields) + 2, 1)
             exposure_layout.addWidget(
                 self._copy_button("Copy exposure command", exposure_preview.toPlainText),
-                len(exposure_fields) + 2,
+                len(exposure_fields) + 3,
                 1,
                 alignment=Qt.AlignmentFlag.AlignRight,
             )

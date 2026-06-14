@@ -275,6 +275,7 @@ The GUI opens to a guided first-run flow:
 - Review scan consent and provider setup before scanning starts.
 - Review a clear next safest action plus the accounts needing attention found by the scan.
 - Check one password directly in the GUI with the free HIBP k-anonymous range check; the field is cleared after checking.
+- Use the password-exposure result to guide rotation without overstating certainty: if the checked password was found, rotate only accounts where you reused it, one at a time.
 - Rotate passwords with masked choices and sync vaults.
 
 After a scan exists, the dashboard shows an account safety summary, accounts needing attention, vault sync status, cleanup reminders, and secondary advanced tools for troubleshooting.
@@ -287,7 +288,7 @@ arg setup-check
 
 This labels local free setup as `ready` or `action_needed`, and labels paid-only upgrades such as Apple notarization, Windows code signing, and optional HIBP email-breach lookup as `paid_optional`.
 
-Check an email address against Have I Been Pwned:
+Optional paid lookup: check an email address against Have I Been Pwned:
 
 ```bash
 arg secret hibp-api-key "YOUR_HIBP_API_KEY"
@@ -313,7 +314,7 @@ arg exposure-plan \
   --findings-json findings.json
 ```
 
-Add the optional paid HIBP email-breach lookup only after you have a HIBP API key:
+Stay on the free path by omitting `--hibp-secret`. Add the optional paid HIBP email-breach lookup only after you have a HIBP API key:
 
 ```bash
 arg exposure-plan \

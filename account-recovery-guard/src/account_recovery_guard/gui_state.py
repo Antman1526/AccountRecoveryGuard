@@ -272,6 +272,20 @@ class GuiAppState:
     def with_password_exposure_count(self, count: int) -> "GuiAppState":
         return replace(self, password_exposure_count=max(count, 0))
 
+    @property
+    def password_exposure_rotation_guidance(self) -> str | None:
+        if self.password_exposure_count is None:
+            return None
+        if self.password_exposure_count > 0:
+            return (
+                "The last checked password was found in breach corpuses. If you reused it, rotate those accounts "
+                "one at a time, starting with the highest-risk alert or the most important account."
+            )
+        return (
+            "The last checked password was not found in HIBP Pwned Passwords. Still keep passwords unique and "
+            "rotate any account with a suspicious alert."
+        )
+
 
 def _risk_label(severity: str) -> str:
     if severity in {"critical", "high"}:

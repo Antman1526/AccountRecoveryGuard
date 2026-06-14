@@ -92,6 +92,21 @@ def test_password_exposure_count_updates_checklist_without_password_storage():
     assert "hunter2" not in repr(exposed)
 
 
+def test_password_exposure_rotation_guidance_is_actionable_without_overstating_detection():
+    unchecked = GuiAppState.new()
+    clean = GuiAppState.new().with_password_exposure_count(0)
+    exposed = GuiAppState.new().with_password_exposure_count(42)
+
+    assert unchecked.password_exposure_rotation_guidance is None
+    assert "not found" in clean.password_exposure_rotation_guidance.lower()
+    assert "suspicious alert" in clean.password_exposure_rotation_guidance
+    assert "If you reused it" in exposed.password_exposure_rotation_guidance
+    assert "one at a time" in exposed.password_exposure_rotation_guidance
+    assert "highest-risk" in exposed.password_exposure_rotation_guidance
+    assert "all sites" not in exposed.password_exposure_rotation_guidance.lower()
+    assert "hunter2" not in exposed.password_exposure_rotation_guidance.lower()
+
+
 def test_protected_person_label_is_safe_and_nonempty():
     state = GuiAppState.new().with_protected_person("  spouse   mailbox  ")
 
