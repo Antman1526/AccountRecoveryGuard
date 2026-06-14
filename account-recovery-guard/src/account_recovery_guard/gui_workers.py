@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from PySide6.QtCore import QObject, Signal, Slot
 
-from .gui_services import SAFE_SCAN_FAILURE_MESSAGE, GuiScanService, scan_progress_stages
+from .gui_services import SAFE_SCAN_FAILURE_MESSAGE, GuiPasswordExposureService, GuiScanService, scan_progress_stages
 
 
 class ScanWorker(QObject):
@@ -31,3 +31,27 @@ class ScanWorker(QObject):
     @Slot()
     def release_sensitive_refs(self) -> None:
         self.service = None
+
+
+class PasswordExposureWorker(QObject):
+    finished = Signal(object)
+
+    def __init__(self, service: GuiPasswordExposureService, password: str) -> None:
+        super().__init__()
+        self.service: GuiPasswordExposureService | None = service
+        self.password: str | None = password
+
+    @Slot()
+    def run(self) -> None:
+        service = self.service
+        password = self.password or ""
+        self.password = None
+        if service is None:
+            self.finished.emit(GuiPasswordExposureService().check_password(""))
+            return
+        self.finished.emit(service.check_password(password))
+
+    @Slot()
+    def release_sensitive_refs(self) -> None:
+        self.service = None
+        self.password = None

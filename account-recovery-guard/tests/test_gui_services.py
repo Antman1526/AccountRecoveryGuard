@@ -3,6 +3,7 @@ import sys
 import types
 
 from account_recovery_guard.gui_services import (
+    GuiPasswordExposureService,
     GuiRotationService,
     GuiScanService,
     GuiVaultService,
@@ -44,6 +45,19 @@ class FakeBitwardenSuccess:
 class FakeBitwardenFailure:
     def upsert_login(self, candidate):
         raise VaultError("BW_SESSION is not set. token=super-secret-value")
+
+
+class FakePwnedPasswordChecker:
+    def __init__(self, count=0, failure=False):
+        self.count = count
+        self.failure = failure
+        self.seen_password = None
+
+    def pwned_password_count(self, password):
+        self.seen_password = password
+        if self.failure:
+            raise RuntimeError("network failed password=hunter2")
+        return self.count
 
 
 def test_describe_provider_setup_keeps_gmail_plain_language():
@@ -233,6 +247,39 @@ def test_rotation_service_builds_five_choices_for_account():
     assert rotation.selected_index is None
     assert {choice.password for choice in rotation.choices}
     assert len({choice.password for choice in rotation.choices}) == 5
+
+
+def test_password_exposure_service_reports_found_without_revealing_password():
+    checker = FakePwnedPasswordChecker(count=12)
+    result = GuiPasswordExposureService(checker=checker).check_password("hunter2")
+
+    assert checker.seen_password == "hunter2"
+    assert result.count == 12
+    assert result.rotation_recommended is True
+    assert "12" in result.user_message
+    assert "hunter2" not in result.user_message
+    assert "hunter2" not in repr(result)
+
+
+def test_password_exposure_service_reports_not_found():
+    result = GuiPasswordExposureService(checker=FakePwnedPasswordChecker(count=0)).check_password("unique-password")
+
+    assert result.count == 0
+    assert result.rotation_recommended is False
+    assert "not found" in result.user_message.lower()
+    assert "unique-password" not in result.user_message
+
+
+def test_password_exposure_service_handles_empty_and_failure_without_secret_echo():
+    empty = GuiPasswordExposureService(checker=FakePwnedPasswordChecker(count=0)).check_password("")
+    failure = GuiPasswordExposureService(checker=FakePwnedPasswordChecker(failure=True)).check_password("hunter2")
+
+    assert empty.count is None
+    assert "Enter a password" in empty.user_message
+    assert failure.count is None
+    assert failure.technical_details == "pwned_password_check_failed"
+    assert "hunter2" not in failure.user_message
+    assert "hunter2" not in failure.technical_details
 
 
 def test_vault_service_reports_not_configured_without_cli_call():

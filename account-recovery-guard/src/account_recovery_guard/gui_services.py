@@ -8,6 +8,7 @@ from pathlib import Path
 from typing import Protocol
 
 from .account_discovery import AccountDiscovery
+from .breach_checker import HibpBreachChecker
 from .email_scanner import EmailClassifier
 from .gui_state import AccountReview, MailProviderChoice, RotationSession, ScanSummary, VaultSyncStatus
 from .models import PasswordCandidate
@@ -89,6 +90,14 @@ class MailProviderSettings:
 class GuiVaultWriteResult:
     status: VaultSyncStatus
     user_message: str
+    technical_details: str = ""
+
+
+@dataclass(frozen=True)
+class GuiPasswordExposureResult:
+    count: int | None
+    user_message: str
+    rotation_recommended: bool = False
     technical_details: str = ""
 
 
@@ -340,6 +349,40 @@ class GuiRotationService:
     def start(self, service_name: str, username: str, url: str | None = None) -> RotationSession:
         account = AccountReview.from_finding_stub(service_name, username)
         return RotationSession(account=account, choices=build_rotation_choices(service_name, username, url))
+
+
+class GuiPasswordExposureService:
+    def __init__(self, checker: HibpBreachChecker | None = None) -> None:
+        self.checker = checker or HibpBreachChecker()
+
+    def check_password(self, password: str) -> GuiPasswordExposureResult:
+        if not password:
+            return GuiPasswordExposureResult(
+                count=None,
+                user_message="Enter a password to check. It will be cleared after the check.",
+            )
+        try:
+            count = self.checker.pwned_password_count(password)
+        except Exception:
+            return GuiPasswordExposureResult(
+                count=None,
+                user_message="The password exposure check could not finish. Try again later.",
+                technical_details="pwned_password_check_failed",
+            )
+        if count > 0:
+            return GuiPasswordExposureResult(
+                count=count,
+                user_message=(
+                    f"This password appears {count} time(s) in HIBP Pwned Passwords. "
+                    "Do not use it; rotate any account where you used it."
+                ),
+                rotation_recommended=True,
+            )
+        return GuiPasswordExposureResult(
+            count=0,
+            user_message="This password was not found in HIBP Pwned Passwords.",
+            rotation_recommended=False,
+        )
 
 
 class GuiVaultService:

@@ -75,6 +75,23 @@ def test_first_run_checklist_points_to_account_review_when_findings_exist():
     assert "one account at a time" in checklist["Review one account"].detail
 
 
+def test_password_exposure_count_updates_checklist_without_password_storage():
+    clean = GuiAppState.new().with_password_exposure_count(0)
+    exposed = GuiAppState.new().with_password_exposure_count(42)
+
+    clean_check = {item.title: item for item in clean.first_run_checklist}
+    exposed_check = {item.title: item for item in exposed.first_run_checklist}
+
+    assert clean.password_exposure_count == 0
+    assert clean_check["Check password exposure"].status == "done"
+    assert "not found" in clean_check["Check password exposure"].detail.lower()
+    assert exposed.password_exposure_count == 42
+    assert exposed_check["Check password exposure"].status == "done"
+    assert exposed_check["Check password exposure"].tone == "attention"
+    assert "appears in breach corpuses" in exposed_check["Check password exposure"].detail
+    assert "hunter2" not in repr(exposed)
+
+
 def test_protected_person_label_is_safe_and_nonempty():
     state = GuiAppState.new().with_protected_person("  spouse   mailbox  ")
 

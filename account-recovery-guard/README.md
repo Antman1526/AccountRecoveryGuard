@@ -274,6 +274,7 @@ The GUI opens to a guided first-run flow:
 - See only the provider setup fields that apply to the selected provider.
 - Review scan consent and provider setup before scanning starts.
 - Review a clear next safest action plus the accounts needing attention found by the scan.
+- Check one password directly in the GUI with the free HIBP k-anonymous range check; the field is cleared after checking.
 - Rotate passwords with masked choices and sync vaults.
 
 After a scan exists, the dashboard shows an account safety summary, accounts needing attention, vault sync status, cleanup reminders, and secondary advanced tools for troubleshooting.

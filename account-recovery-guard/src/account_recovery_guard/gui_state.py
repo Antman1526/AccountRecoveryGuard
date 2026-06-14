@@ -162,6 +162,7 @@ class GuiAppState:
     selected_account: AccountReview | None = None
     rotation_session: RotationSession | None = field(default=None, repr=False)
     vault_status: VaultSyncStatus = VaultSyncStatus()
+    password_exposure_count: int | None = None
 
     @classmethod
     def new(cls) -> "GuiAppState":
@@ -210,9 +211,9 @@ class GuiAppState:
             ),
             ChecklistItem(
                 "Check password exposure",
-                "available",
-                "Use the free HIBP k-anonymous password check only for a password you provide through the secure store.",
-                "safe",
+                "done" if self.password_exposure_count is not None else "available",
+                _password_exposure_checklist_detail(self.password_exposure_count),
+                "attention" if self.password_exposure_count and self.password_exposure_count > 0 else "safe",
             ),
             ChecklistItem(
                 "Sync vaults",
@@ -268,6 +269,9 @@ class GuiAppState:
             raise ValueError("A scan summary is required before opening the dashboard")
         return replace(self, current_step=GuiStep.DASHBOARD)
 
+    def with_password_exposure_count(self, count: int) -> "GuiAppState":
+        return replace(self, password_exposure_count=max(count, 0))
+
 
 def _risk_label(severity: str) -> str:
     if severity in {"critical", "high"}:
@@ -284,3 +288,11 @@ def _normalize_person_label(label: str) -> str:
     if not normalized:
         return "Me"
     return normalized[:40]
+
+
+def _password_exposure_checklist_detail(count: int | None) -> str:
+    if count is None:
+        return "Use the free HIBP k-anonymous password check only for a password you type into the masked field."
+    if count > 0:
+        return "The checked password appears in breach corpuses. Rotate any account where you used it."
+    return "The checked password was not found in HIBP Pwned Passwords."
