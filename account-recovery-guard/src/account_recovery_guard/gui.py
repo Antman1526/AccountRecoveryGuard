@@ -10,15 +10,16 @@ from .gui_workflow import (
     build_protection_plan,
     build_command_preview,
     consumer_readiness_rows,
+    guided_vault_sync_ready,
     password_exposure_blocked_message,
     password_exposure_prompt_lines,
     password_exposure_ready,
     recovery_stages,
     rotation_copy_confirmation_text,
+    rotation_copy_ready,
     safe_recovery_scope_lines,
     suggested_next_actions,
     vault_sync_confirmation_texts,
-    vault_sync_ready,
 )
 from .gui_theme import calm_shield_stylesheet
 from .passkeys import passkey_guidance
@@ -895,8 +896,13 @@ def main() -> int:
             copy = QPushButton("Copy selected password")
             copy.setObjectName("primaryButton")
             copy.setCursor(Qt.CursorShape.PointingHandCursor)
-            copy.setEnabled(False)
-            copy_guard.stateChanged.connect(lambda state, button=copy: button.setEnabled(state != 0))
+            password_selected = session.selected_index is not None
+            copy.setEnabled(rotation_copy_ready(password_selected, copy_guard.isChecked()))
+            copy_guard.stateChanged.connect(
+                lambda state, button=copy, selected=password_selected: button.setEnabled(
+                    rotation_copy_ready(selected, state != 0)
+                )
+            )
             button_row.addWidget(copy_guard)
             copy.clicked.connect(self._copy_selected_rotation_password)
             button_row.addWidget(copy)
@@ -918,15 +924,17 @@ def main() -> int:
             sync_vaults = QPushButton("Prepare vault sync")
             sync_vaults.setObjectName("secondaryButton")
             sync_vaults.setCursor(Qt.CursorShape.PointingHandCursor)
-            sync_vaults.setEnabled(False)
+            sync_vaults.setEnabled(
+                guided_vault_sync_ready(password_selected, confirmed.isChecked(), verified.isChecked())
+            )
             confirmed.stateChanged.connect(
-                lambda state, changed=confirmed, checked=verified, button=sync_vaults: button.setEnabled(
-                    vault_sync_ready(changed.isChecked(), checked.isChecked())
+                lambda state, changed=confirmed, checked=verified, button=sync_vaults, selected=password_selected: button.setEnabled(
+                    guided_vault_sync_ready(selected, changed.isChecked(), checked.isChecked())
                 )
             )
             verified.stateChanged.connect(
-                lambda state, changed=confirmed, checked=verified, button=sync_vaults: button.setEnabled(
-                    vault_sync_ready(changed.isChecked(), checked.isChecked())
+                lambda state, changed=confirmed, checked=verified, button=sync_vaults, selected=password_selected: button.setEnabled(
+                    guided_vault_sync_ready(selected, changed.isChecked(), checked.isChecked())
                 )
             )
             sync_vaults.clicked.connect(self._prepare_vault_sync_after_rotation)

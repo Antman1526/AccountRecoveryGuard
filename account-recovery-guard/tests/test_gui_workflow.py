@@ -6,9 +6,11 @@ from account_recovery_guard.gui_workflow import password_exposure_prompt_lines
 from account_recovery_guard.gui_workflow import password_exposure_ready
 from account_recovery_guard.gui_workflow import (
     SECRET_REFERENCE_PLACEHOLDER,
+    guided_vault_sync_ready,
     looks_like_direct_secret,
     recovery_stages,
     rotation_copy_confirmation_text,
+    rotation_copy_ready,
     safe_preview_value,
     safe_recovery_scope_lines,
     suggested_next_actions,
@@ -141,6 +143,13 @@ def test_rotation_copy_confirmation_distinguishes_verified_and_manual_paths():
     assert "suspicious email link" in untrusted
 
 
+def test_rotation_copy_ready_requires_selection_and_official_page_confirmation():
+    assert rotation_copy_ready(False, False) is False
+    assert rotation_copy_ready(True, False) is False
+    assert rotation_copy_ready(False, True) is False
+    assert rotation_copy_ready(True, True) is True
+
+
 def test_vault_sync_confirmation_requires_real_account_success():
     changed_text, verified_text = vault_sync_confirmation_texts()
 
@@ -150,6 +159,13 @@ def test_vault_sync_confirmation_requires_real_account_success():
     assert vault_sync_ready(True, False) is False
     assert vault_sync_ready(False, True) is False
     assert vault_sync_ready(True, True) is True
+
+
+def test_guided_vault_sync_ready_requires_selected_password_and_real_account_success():
+    assert guided_vault_sync_ready(False, True, True) is False
+    assert guided_vault_sync_ready(True, False, True) is False
+    assert guided_vault_sync_ready(True, True, False) is False
+    assert guided_vault_sync_ready(True, True, True) is True
 
 
 def test_safe_recovery_scope_is_clear_on_first_launch():

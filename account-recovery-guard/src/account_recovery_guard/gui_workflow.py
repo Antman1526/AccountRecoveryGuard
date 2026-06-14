@@ -165,6 +165,10 @@ def rotation_copy_confirmation_text(reset_link_is_trusted: bool) -> str:
     return "I am on the official website or app, not a suspicious email link."
 
 
+def rotation_copy_ready(password_selected: bool, official_page_confirmed: bool) -> bool:
+    return password_selected and official_page_confirmed
+
+
 def vault_sync_confirmation_texts() -> tuple[str, str]:
     return (
         "I changed this password on the official website or app.",
@@ -174,6 +178,10 @@ def vault_sync_confirmation_texts() -> tuple[str, str]:
 
 def vault_sync_ready(changed_on_service: bool, sign_in_confirmed: bool) -> bool:
     return changed_on_service and sign_in_confirmed
+
+
+def guided_vault_sync_ready(password_selected: bool, changed_on_service: bool, sign_in_confirmed: bool) -> bool:
+    return password_selected and vault_sync_ready(changed_on_service, sign_in_confirmed)
 
 
 def safe_recovery_scope_lines() -> list[str]:
