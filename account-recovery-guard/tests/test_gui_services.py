@@ -194,6 +194,54 @@ def test_gmail_provider_factory_uses_app_password_for_full_mailbox(monkeypatch):
     assert stored["gmail-imap-app-password:you@gmail.com"] == "abcdefghijklmnop"
 
 
+def test_gmail_provider_factory_rejects_normal_password_before_storage(monkeypatch):
+    stored = {}
+
+    secure_store = types.ModuleType("account_recovery_guard.secure_store")
+    secure_store.set_secret = lambda name, value: stored.__setitem__(name, value)
+    secure_store.get_secret = lambda name: stored.get(name)
+    monkeypatch.setitem(sys.modules, "account_recovery_guard.secure_store", secure_store)
+
+    provider, error = build_provider_or_error(
+        MailProviderSettings(
+            provider=MailProviderChoice.GMAIL,
+            username="you@gmail.com",
+            gmail_app_password="my normal password!",
+        )
+    )
+
+    assert provider is None
+    assert error is not None
+    assert "does not look like a Google app password" in error.user_message
+    assert "normal Google password" in error.user_message
+    assert error.technical_details == "invalid_gmail_app_password"
+    assert stored == {}
+    assert "my normal password" not in error.user_message
+    assert "my normal password" not in error.technical_details
+
+
+def test_gmail_provider_factory_rejects_invalid_saved_secret_without_echo(monkeypatch):
+    secure_store = types.ModuleType("account_recovery_guard.secure_store")
+    secure_store.set_secret = lambda name, value: None
+    secure_store.get_secret = lambda name: "normal-password-with-symbols!"
+    monkeypatch.setitem(sys.modules, "account_recovery_guard.secure_store", secure_store)
+
+    provider, error = build_provider_or_error(
+        MailProviderSettings(
+            provider=MailProviderChoice.GMAIL,
+            username="you@gmail.com",
+        )
+    )
+
+    assert provider is None
+    assert error is not None
+    assert "saved Gmail secret" in error.user_message
+    assert "16-character app password" in error.user_message
+    assert error.technical_details == "invalid_gmail_app_password"
+    assert "normal-password" not in error.user_message
+    assert "normal-password" not in error.technical_details
+
+
 def test_outlook_provider_factory_explains_missing_client_id():
     provider, error = build_provider_or_error(MailProviderSettings(provider=MailProviderChoice.OUTLOOK))
 

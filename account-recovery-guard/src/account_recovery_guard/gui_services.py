@@ -24,6 +24,7 @@ class MailProvider(Protocol):
 SAFE_SCAN_FAILURE_MESSAGE = "The scan could not finish. Check your provider setup and try again."
 SETUP_DETAIL_MISSING_CLIENT_SECRET_FILE = "missing_client_secret_file"
 SETUP_DETAIL_MISSING_GMAIL_APP_PASSWORD = "missing_gmail_app_password"
+SETUP_DETAIL_INVALID_GMAIL_APP_PASSWORD = "invalid_gmail_app_password"
 SETUP_DETAIL_MISSING_CLIENT_ID = "missing_client_id"
 SETUP_DETAIL_MISSING_IMAP_SETUP = "missing_imap_setup"
 SETUP_DETAIL_MISSING_SAVED_IMAP_SECRET = "missing_saved_imap_secret"
@@ -46,6 +47,7 @@ CONTROLLED_SETUP_DETAIL_CODES = frozenset(
     {
         SETUP_DETAIL_MISSING_CLIENT_SECRET_FILE,
         SETUP_DETAIL_MISSING_GMAIL_APP_PASSWORD,
+        SETUP_DETAIL_INVALID_GMAIL_APP_PASSWORD,
         SETUP_DETAIL_MISSING_CLIENT_ID,
         SETUP_DETAIL_MISSING_IMAP_SETUP,
         SETUP_DETAIL_MISSING_SAVED_IMAP_SECRET,
@@ -237,6 +239,14 @@ def build_provider_or_error(settings: MailProviderSettings) -> tuple[MailProvide
                 user_message="Enter your Gmail address before starting the scan.",
                 technical_details=SETUP_DETAIL_MISSING_GMAIL_APP_PASSWORD,
             )
+        if app_password and not _gmail_app_password_is_plausible(app_password):
+            return None, UserFacingSetupError(
+                user_message=(
+                    "That does not look like a Google app password. Create a 16-character app password for Mail "
+                    "and do not paste your normal Google password."
+                ),
+                technical_details=SETUP_DETAIL_INVALID_GMAIL_APP_PASSWORD,
+            )
         try:
             from .secure_store import get_secret, set_secret
 
@@ -244,7 +254,7 @@ def build_provider_or_error(settings: MailProviderSettings) -> tuple[MailProvide
                 set_secret(secret_name, app_password)
                 password = app_password
             else:
-                password = get_secret(secret_name)
+                password = _normalize_gmail_app_password(get_secret(secret_name) or "")
         except Exception:
             return None, UserFacingSetupError(
                 user_message="The Gmail app password could not be saved or read. Check your credential store and try again.",
@@ -257,6 +267,14 @@ def build_provider_or_error(settings: MailProviderSettings) -> tuple[MailProvide
                     "If this is a work or school account, your administrator may require OAuth setup instead."
                 ),
                 technical_details=SETUP_DETAIL_MISSING_GMAIL_APP_PASSWORD,
+            )
+        if not _gmail_app_password_is_plausible(password):
+            return None, UserFacingSetupError(
+                user_message=(
+                    "The saved Gmail secret does not look like a Google app password. Replace it with a "
+                    "16-character app password for Mail."
+                ),
+                technical_details=SETUP_DETAIL_INVALID_GMAIL_APP_PASSWORD,
             )
 
         from .email_scanner import ImapEmailScanner, ImapMailboxConfig
@@ -334,6 +352,10 @@ def build_provider_or_error(settings: MailProviderSettings) -> tuple[MailProvide
 
 def _normalize_gmail_app_password(app_password: str) -> str:
     return "".join(app_password.split())
+
+
+def _gmail_app_password_is_plausible(app_password: str) -> bool:
+    return len(app_password) == 16 and app_password.isascii() and app_password.isalnum()
 
 
 def _gmail_secret_name(username: str) -> str:
