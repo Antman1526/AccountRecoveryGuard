@@ -409,3 +409,17 @@ def test_vault_sync_status_cleanup_message_includes_staged_csv_path():
 
     assert status.requires_csv_cleanup is True
     assert "/tmp/nordpass.csv" in status.cleanup_message
+
+
+def test_app_state_records_vault_status_update():
+    status = VaultSyncStatus(
+        bitwarden="not_configured",
+        nordpass="csv_prepared",
+        verification="pending",
+        csv_path="/tmp/nordpass.csv",
+    )
+
+    state = GuiAppState.new().with_vault_status(status)
+
+    assert state.vault_status == status
+    assert state.vault_status.requires_csv_cleanup is True

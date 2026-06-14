@@ -420,6 +420,27 @@ class GuiVaultService:
             user_message="Bitwarden was updated. NordPass import is still needed.",
         )
 
+    def stage_nordpass_import(self, candidate: PasswordCandidate, destination: Path) -> GuiVaultWriteResult:
+        try:
+            csv_path = self.nordpass.stage_import([candidate], destination)
+        except Exception:
+            return GuiVaultWriteResult(
+                status=VaultSyncStatus(bitwarden="not_configured", nordpass="export_needed", verification="pending"),
+                user_message="NordPass import CSV could not be prepared. Check the destination folder and try again.",
+                technical_details="nordpass_csv_stage_failed",
+            )
+        return GuiVaultWriteResult(
+            status=VaultSyncStatus(
+                bitwarden="not_configured",
+                nordpass="csv_prepared",
+                verification="pending",
+                csv_path=str(csv_path),
+            ),
+            user_message=(
+                "NordPass import CSV is ready. Import it into NordPass, verify the entry, then delete the CSV."
+            ),
+        )
+
 
 _SECRET_VALUE_PATTERNS = (
     re.compile(r"(?i)\b(token|secret|password|session|api[_-]?key|access[_-]?token|refresh[_-]?token)=\S+"),

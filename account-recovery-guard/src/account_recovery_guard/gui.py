@@ -49,6 +49,7 @@ def main() -> int:
         GuiPasswordExposureService,
         GuiScanService,
         GuiRotationService,
+        GuiVaultService,
         MailProviderSettings,
         SETUP_DETAIL_MISSING_PROVIDER,
         SETUP_DETAIL_MISSING_PROVIDER_INSTANCE,
@@ -60,8 +61,9 @@ def main() -> int:
         scan_progress_stages,
         visible_setup_fields,
     )
-    from .gui_state import AccountReview, GuiAppState, MailProviderChoice, ScanSummary
+    from .gui_state import AccountReview, GuiAppState, MailProviderChoice, ScanSummary, VaultSyncStatus
     from .gui_workers import PasswordExposureWorker, ScanWorker
+    from .vaults import BitwardenVault
 
     class MainWindow(QMainWindow):
         def __init__(self) -> None:
@@ -654,6 +656,13 @@ def main() -> int:
 
             vault_card = Card("Vault sync")
             vault_card.body.addWidget(self._body_label(self.state.vault_status.primary_message, "listText"))
+            vault_card.body.addWidget(
+                self._body_label(
+                    "Only prepare vault updates after the password was changed on the real service. NordPass uses a "
+                    "plaintext CSV import file, so import it immediately and delete it after verification.",
+                    "warningText",
+                )
+            )
             if self.state.vault_status.requires_csv_cleanup:
                 vault_card.body.addWidget(self._body_label(self.state.vault_status.cleanup_message, "listText"))
             self.rotation_layout.addWidget(vault_card)
@@ -676,6 +685,15 @@ def main() -> int:
                 reset.setCursor(Qt.CursorShape.PointingHandCursor)
                 reset.clicked.connect(lambda checked=False, link=account.reset_link: webbrowser.open(link))
                 button_row.addWidget(reset)
+            confirmed = QCheckBox("I changed this password on the website")
+            sync_vaults = QPushButton("Prepare vault sync")
+            sync_vaults.setObjectName("secondaryButton")
+            sync_vaults.setCursor(Qt.CursorShape.PointingHandCursor)
+            sync_vaults.setEnabled(False)
+            confirmed.stateChanged.connect(lambda state, button=sync_vaults: button.setEnabled(state != 0))
+            sync_vaults.clicked.connect(self._prepare_vault_sync_after_rotation)
+            button_row.addWidget(confirmed)
+            button_row.addWidget(sync_vaults)
             back = QPushButton("Back to results")
             back.setObjectName("secondaryButton")
             back.setCursor(Qt.CursorShape.PointingHandCursor)
@@ -716,6 +734,42 @@ def main() -> int:
                     if copied
                     else "Clipboard copy is unavailable."
                 )
+
+        def _prepare_vault_sync_after_rotation(self) -> None:
+            session = self.state.rotation_session
+            if session is None:
+                if hasattr(self, "rotation_status_label"):
+                    self.rotation_status_label.setText("Choose an account and password before preparing vault sync.")
+                return
+            try:
+                selected = session.selected_candidate
+            except ValueError:
+                if hasattr(self, "rotation_status_label"):
+                    self.rotation_status_label.setText("Select one masked password choice before preparing vault sync.")
+                return
+
+            vault_service = self._build_vault_service()
+            bitwarden_result = vault_service.write_bitwarden(selected)
+            nordpass_path = user_state_dir() / "nordpass-import.csv"
+            nordpass_result = vault_service.stage_nordpass_import(selected, nordpass_path)
+            status = VaultSyncStatus(
+                bitwarden=bitwarden_result.status.bitwarden,
+                nordpass=nordpass_result.status.nordpass,
+                verification="pending",
+                csv_path=nordpass_result.status.csv_path,
+            )
+            self.state = self.state.with_vault_status(status)
+            message = f"{bitwarden_result.user_message} {nordpass_result.user_message}"
+            self._render_rotation_panel()
+            if hasattr(self, "rotation_status_label"):
+                self.rotation_status_label.setText(message)
+            self._refresh_dashboard()
+
+        def _build_vault_service(self) -> GuiVaultService:
+            try:
+                return GuiVaultService(bitwarden=BitwardenVault())
+            except Exception:
+                return GuiVaultService(bitwarden=None)
 
         def _dashboard_page(self) -> QScrollArea:
             page, layout = self._wizard_page()

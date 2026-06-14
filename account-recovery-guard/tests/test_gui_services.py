@@ -302,6 +302,21 @@ def test_vault_service_reports_success_with_status():
     assert "updated" in result.user_message.lower()
 
 
+def test_vault_service_stages_nordpass_import_without_echoing_password(tmp_path):
+    candidate = PasswordCandidate("Dropbox", "me@example.com", "https://dropbox.com", "Secret123!", "note")
+    destination = tmp_path / "nordpass-import.csv"
+
+    result = GuiVaultService(bitwarden=None).stage_nordpass_import(candidate, destination)
+
+    assert result.status.nordpass == "csv_prepared"
+    assert result.status.requires_csv_cleanup is True
+    assert result.status.csv_path == str(destination)
+    assert destination.exists()
+    assert "Secret123" not in result.user_message
+    assert "Secret123" not in result.technical_details
+    assert "delete the CSV" in result.user_message
+
+
 def test_vault_service_sanitizes_failure_details():
     candidate = PasswordCandidate("Dropbox", "me@example.com", "https://dropbox.com", "Secret123!", "note")
 

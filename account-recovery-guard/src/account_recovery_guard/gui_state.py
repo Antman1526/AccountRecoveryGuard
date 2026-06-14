@@ -286,6 +286,9 @@ class GuiAppState:
     def with_password_exposure_count(self, count: int) -> "GuiAppState":
         return replace(self, password_exposure_count=max(count, 0))
 
+    def with_vault_status(self, status: VaultSyncStatus) -> "GuiAppState":
+        return replace(self, vault_status=status)
+
     @property
     def password_exposure_rotation_guidance(self) -> str | None:
         if self.password_exposure_count is None:
