@@ -8,6 +8,7 @@ from .clipboard import copy_text
 from .exposure import SAFE_EXPOSURE_BOUNDARY
 from .gui_workflow import (
     build_command_preview,
+    consumer_readiness_rows,
     password_exposure_prompt_lines,
     recovery_stages,
     safe_recovery_scope_lines,
@@ -16,6 +17,7 @@ from .gui_workflow import (
 from .gui_theme import calm_shield_stylesheet
 from .passkeys import passkey_guidance
 from .paths import user_state_dir
+from .readiness import build_readiness_checks
 from .rotation import build_rotation_choices, summarize_rotation_choices
 from .secure_files import delete_file, plaintext_file_warning
 
@@ -149,6 +151,17 @@ def main() -> int:
                 safe_scope.body.addWidget(self._body_label(line, "listText"))
             layout.addWidget(safe_scope)
 
+            readiness = Card("This computer's free setup")
+            readiness.body.addWidget(
+                self._body_label(
+                    "Ready means the free local helper is available. Needs setup usually means you need to install "
+                    "or unlock something you already control. Paid optional items are skipped in free-only mode.",
+                    "listText",
+                )
+            )
+            self._fill_readiness_card(readiness)
+            layout.addWidget(readiness)
+
             checklist = Card("Protection checklist")
             self._fill_checklist_card(checklist)
             layout.addWidget(checklist)
@@ -176,6 +189,26 @@ def main() -> int:
                 row_layout.setSpacing(10)
                 pill = StatusPill(item.status, item.tone)
                 row_layout.addWidget(pill)
+                text_col = QVBoxLayout()
+                title = QLabel(item.title)
+                title.setObjectName("rowTitle")
+                title.setWordWrap(True)
+                detail = QLabel(item.detail)
+                detail.setObjectName("listText")
+                detail.setWordWrap(True)
+                text_col.addWidget(title)
+                text_col.addWidget(detail)
+                row_layout.addLayout(text_col, 1)
+                card.body.addWidget(row)
+
+        def _fill_readiness_card(self, card: Card) -> None:
+            for item in consumer_readiness_rows(build_readiness_checks()):
+                row = QFrame()
+                row.setObjectName("checklistRow")
+                row_layout = QHBoxLayout(row)
+                row_layout.setContentsMargins(12, 10, 12, 10)
+                row_layout.setSpacing(10)
+                row_layout.addWidget(StatusPill(item.status, item.tone))
                 text_col = QVBoxLayout()
                 title = QLabel(item.title)
                 title.setObjectName("rowTitle")

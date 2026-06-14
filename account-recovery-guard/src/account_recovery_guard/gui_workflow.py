@@ -13,6 +13,14 @@ class RecoveryStage:
     command: str
 
 
+@dataclass(frozen=True)
+class ReadinessRow:
+    title: str
+    status: str
+    detail: str
+    tone: str = "safe"
+
+
 def build_command_preview(command: str, options: dict[str, Any]) -> str:
     parts = ["account-recovery-guard", command]
     for key, value in options.items():
@@ -92,3 +100,45 @@ def safe_recovery_scope_lines() -> list[str]:
         "That boundary protects you from unsafe sources, unreliable results, and exposing credentials further.",
         "Start by scanning one authorized mailbox, then rotate only accounts with clear risk signals or reused exposed passwords.",
     ]
+
+
+def consumer_readiness_rows(checks) -> list[ReadinessRow]:
+    check_by_name = {check.name: check for check in checks}
+    rows = []
+    for name in (
+        "OS credential store",
+        "Bitwarden CLI",
+        "Desktop GUI",
+        "Reset browser helper",
+        "Free password exposure check",
+        "Bitwarden session",
+        "NordPass sync",
+        "HIBP email-breach lookup",
+    ):
+        check = check_by_name.get(name)
+        if check is None:
+            continue
+        rows.append(
+            ReadinessRow(
+                title=name,
+                status=_readiness_status_label(check.status),
+                detail=check.detail,
+                tone=_readiness_tone(check.status),
+            )
+        )
+    return rows
+
+
+def _readiness_status_label(status: str) -> str:
+    return {
+        "ready": "ready",
+        "action_needed": "needs setup",
+        "manual_required": "manual",
+        "paid_optional": "paid optional",
+    }.get(status, "review")
+
+
+def _readiness_tone(status: str) -> str:
+    if status == "action_needed":
+        return "attention"
+    return "safe"

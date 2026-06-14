@@ -1,6 +1,8 @@
 from account_recovery_guard.gui_workflow import build_command_preview
+from account_recovery_guard.gui_workflow import consumer_readiness_rows
 from account_recovery_guard.gui_workflow import password_exposure_prompt_lines
 from account_recovery_guard.gui_workflow import recovery_stages, safe_recovery_scope_lines, suggested_next_actions
+from account_recovery_guard.readiness import ReadinessCheck
 
 
 def test_build_command_preview_escapes_values_for_copyable_cli():
@@ -63,3 +65,23 @@ def test_safe_recovery_scope_is_clear_on_first_launch():
     assert "dark-web dumps" in text
     assert "exposing credentials further" in text
     assert "one authorized mailbox" in text
+
+
+def test_consumer_readiness_rows_keep_free_manual_and_paid_boundaries_clear():
+    rows = consumer_readiness_rows(
+        (
+            ReadinessCheck("OS credential store", "ready", "Secrets use the OS credential store."),
+            ReadinessCheck("Bitwarden session", "action_needed", "Unlock Bitwarden yourself."),
+            ReadinessCheck("NordPass sync", "manual_required", "Import the CSV into NordPass."),
+            ReadinessCheck("HIBP email-breach lookup", "paid_optional", "Requires a HIBP API key."),
+            ReadinessCheck("macOS app signing", "paid_optional", "Requires Apple Developer."),
+        )
+    )
+    by_title = {row.title: row for row in rows}
+
+    assert by_title["OS credential store"].status == "ready"
+    assert by_title["Bitwarden session"].status == "needs setup"
+    assert by_title["Bitwarden session"].tone == "attention"
+    assert by_title["NordPass sync"].status == "manual"
+    assert by_title["HIBP email-breach lookup"].status == "paid optional"
+    assert "macOS app signing" not in by_title
