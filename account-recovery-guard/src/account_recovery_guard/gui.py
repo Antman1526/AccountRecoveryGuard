@@ -56,6 +56,7 @@ def main() -> int:
 
     from .gui_components import Card, ProviderButton, StepHeader, StatusPill
     from .gui_services import (
+        DEFAULT_GUI_SCAN_DAYS,
         GuiPasswordExposureService,
         GuiScanService,
         GuiRotationService,
@@ -72,6 +73,7 @@ def main() -> int:
         provider_setup_actions,
         provider_setup_note,
         provider_setup_steps,
+        scan_scope_note,
         scan_progress_stages,
         visible_setup_fields,
     )
@@ -260,7 +262,7 @@ def main() -> int:
             self.setup_username.setPlaceholderText("you@example.com")
             self.setup_days_back = QSpinBox()
             self.setup_days_back.setRange(1, 3650)
-            self.setup_days_back.setValue(30)
+            self.setup_days_back.setValue(DEFAULT_GUI_SCAN_DAYS)
             self.setup_gmail_app_password = QLineEdit("")
             self.setup_gmail_app_password.setEchoMode(QLineEdit.EchoMode.Password)
             self.setup_gmail_app_password.setPlaceholderText("16-character Google app password")
@@ -298,6 +300,8 @@ def main() -> int:
                 form.addWidget(widget, row, 1)
                 self.setup_field_rows[field_key] = (label_widget, widget)
             setup.body.addLayout(form)
+            self.setup_scan_scope_note = self._body_label("", "listText")
+            setup.body.addWidget(self.setup_scan_scope_note)
             person_row = QHBoxLayout()
             person_row.addWidget(self._body_label("Quick choices:", "listText"))
             for label in ("Me", "Second person"):
@@ -322,6 +326,8 @@ def main() -> int:
             self.setup_steps_card = Card("Connection steps")
             setup.body.addWidget(self.setup_steps_card)
             self.setup_gmail_advanced_oauth.stateChanged.connect(lambda: self._update_provider_setup_visibility())
+            self.setup_gmail_full_mailbox.stateChanged.connect(lambda: self._update_provider_setup_visibility())
+            self.setup_days_back.valueChanged.connect(lambda: self._update_provider_setup_visibility())
             layout.addWidget(setup)
 
             consent_confirm = Card("Permission to scan")
@@ -391,6 +397,7 @@ def main() -> int:
                 days_back=self.setup_days_back.value(),
                 gmail_app_password=self.setup_gmail_app_password.text(),
                 gmail_full_mailbox=self.setup_gmail_full_mailbox.isChecked(),
+                gmail_advanced_oauth=self.setup_gmail_advanced_oauth.isChecked(),
                 gmail_client_secret_file=(
                     self.setup_gmail_client_secret_file.text()
                     if self.setup_gmail_advanced_oauth.isChecked()
@@ -452,6 +459,9 @@ def main() -> int:
                 self.setup_gmail_advanced_oauth.isChecked()
                 if hasattr(self, "setup_gmail_advanced_oauth")
                 else False,
+                self.setup_gmail_full_mailbox.isChecked()
+                if hasattr(self, "setup_gmail_full_mailbox")
+                else True,
             )
             for field_key, (label, widget) in self.setup_field_rows.items():
                 is_visible = field_key in visible
@@ -461,6 +471,19 @@ def main() -> int:
                 self.setup_provider_note.setText(
                     provider_setup_note(
                         self.state.mail_provider,
+                        self.setup_gmail_advanced_oauth.isChecked()
+                        if hasattr(self, "setup_gmail_advanced_oauth")
+                        else False,
+                    )
+                )
+            if hasattr(self, "setup_scan_scope_note"):
+                self.setup_scan_scope_note.setText(
+                    scan_scope_note(
+                        self.state.mail_provider,
+                        self.setup_days_back.value() if hasattr(self, "setup_days_back") else DEFAULT_GUI_SCAN_DAYS,
+                        self.setup_gmail_full_mailbox.isChecked()
+                        if hasattr(self, "setup_gmail_full_mailbox")
+                        else True,
                         self.setup_gmail_advanced_oauth.isChecked()
                         if hasattr(self, "setup_gmail_advanced_oauth")
                         else False,

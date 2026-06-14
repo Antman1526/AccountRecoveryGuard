@@ -280,6 +280,7 @@ The GUI opens to a guided first-run flow:
 - See only the provider setup fields that apply to the selected provider.
 - For personal Gmail, follow the in-app app-password steps; no Google OAuth JSON import file is needed unless you choose advanced setup.
 - Gmail setup rejects values that do not look like a 16-character Google app password before saving anything.
+- See the scan scope before starting: personal Gmail full-mailbox mode scans Gmail All Mail, while Outlook/Other Email use a broad date-limited scan that can be increased.
 - Confirm you have permission to scan the selected mailbox before the scan can start.
 - Review scan consent and provider setup before scanning starts.
 - Review a clear next safest action plus the accounts needing attention found by the scan.

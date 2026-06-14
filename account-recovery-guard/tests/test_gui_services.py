@@ -18,6 +18,7 @@ from account_recovery_guard.gui_services import (
     provider_setup_note,
     provider_setup_actions,
     provider_setup_steps,
+    scan_scope_note,
     scan_progress_stages,
     visible_setup_fields,
 )
@@ -95,16 +96,26 @@ def test_visible_setup_fields_keep_gmail_simple_by_default():
     assert "username" in fields
     assert "gmail_app_password" in fields
     assert "gmail_full_mailbox" in fields
+    assert "days_back" not in fields
     assert "gmail_client_secret_file" not in fields
     assert "graph_client_id" not in fields
     assert "imap_host" not in fields
+
+
+def test_visible_setup_fields_show_days_when_gmail_full_mailbox_is_off():
+    fields = visible_setup_fields(MailProviderChoice.GMAIL, gmail_full_mailbox=False)
+
+    assert "days_back" in fields
+    assert "gmail_full_mailbox" in fields
 
 
 def test_visible_setup_fields_show_gmail_oauth_only_when_enabled():
     fields = visible_setup_fields(MailProviderChoice.GMAIL, gmail_advanced_oauth=True)
 
     assert "gmail_client_secret_file" in fields
-    assert "gmail_app_password" in fields
+    assert "gmail_app_password" not in fields
+    assert "gmail_full_mailbox" not in fields
+    assert "days_back" in fields
 
 
 def test_visible_setup_fields_are_provider_specific():
@@ -155,6 +166,20 @@ def test_provider_setup_steps_warn_outlook_and_other_email_about_normal_password
     assert "OS credential store" in other
 
 
+def test_scan_scope_note_makes_full_mailbox_and_bounded_scans_clear():
+    full_gmail = scan_scope_note(MailProviderChoice.GMAIL, days_back=30, gmail_full_mailbox=True)
+    recent_gmail = scan_scope_note(MailProviderChoice.GMAIL, days_back=90, gmail_full_mailbox=False)
+    outlook = scan_scope_note(MailProviderChoice.OUTLOOK, days_back=365)
+
+    assert "full Gmail mailbox" in full_gmail
+    assert "All Mail" in full_gmail
+    assert "30" not in full_gmail
+    assert "last 90 day" in recent_gmail
+    assert "Inbox" in recent_gmail
+    assert "last 365 day" in outlook
+    assert "broader free scan" in outlook
+
+
 def test_provider_setup_actions_open_only_official_https_setup_pages():
     gmail = provider_setup_actions(MailProviderChoice.GMAIL)
     gmail_advanced = provider_setup_actions(MailProviderChoice.GMAIL, gmail_advanced_oauth=True)
@@ -192,6 +217,18 @@ def test_gmail_provider_factory_explains_missing_app_password():
     assert error is not None
     assert "Gmail address" in error.user_message
     assert "gmail_app_password" in error.technical_details
+
+
+def test_gmail_provider_factory_explains_missing_advanced_oauth_file():
+    provider, error = build_provider_or_error(
+        MailProviderSettings(provider=MailProviderChoice.GMAIL, gmail_advanced_oauth=True)
+    )
+
+    assert provider is None
+    assert error is not None
+    assert "OAuth client JSON" in error.user_message
+    assert "app password setup is simpler" in error.user_message
+    assert error.technical_details == "missing_client_secret_file"
 
 
 def test_gmail_provider_factory_uses_app_password_for_full_mailbox(monkeypatch):

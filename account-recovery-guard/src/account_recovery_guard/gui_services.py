@@ -24,6 +24,7 @@ class MailProvider(Protocol):
         ...
 
 
+DEFAULT_GUI_SCAN_DAYS = 365
 SAFE_SCAN_FAILURE_MESSAGE = "The scan could not finish. Check your provider setup and try again."
 SETUP_DETAIL_MISSING_CLIENT_SECRET_FILE = "missing_client_secret_file"
 SETUP_DETAIL_MISSING_GMAIL_APP_PASSWORD = "missing_gmail_app_password"
@@ -90,10 +91,11 @@ class UserFacingSetupError:
 class MailProviderSettings:
     provider: MailProviderChoice
     username: str = ""
-    days_back: int = 30
+    days_back: int = DEFAULT_GUI_SCAN_DAYS
     gmail_app_password: str = ""
     gmail_secret_name: str = ""
     gmail_full_mailbox: bool = True
+    gmail_advanced_oauth: bool = False
     gmail_client_secret_file: str = ""
     graph_tenant_id: str = "common"
     graph_client_id: str = ""
@@ -144,18 +146,25 @@ def describe_provider_setup(provider: MailProviderChoice) -> ProviderSetupCopy:
     )
 
 
-def visible_setup_fields(provider: MailProviderChoice | None, gmail_advanced_oauth: bool = False) -> frozenset[str]:
+def visible_setup_fields(
+    provider: MailProviderChoice | None,
+    gmail_advanced_oauth: bool = False,
+    gmail_full_mailbox: bool = True,
+) -> frozenset[str]:
     if provider == MailProviderChoice.GMAIL:
         fields = {
             FIELD_PERSON_LABEL,
             FIELD_USERNAME,
-            FIELD_DAYS_BACK,
-            FIELD_GMAIL_APP_PASSWORD,
-            FIELD_GMAIL_FULL_MAILBOX,
             FIELD_GMAIL_ADVANCED_OAUTH,
         }
         if gmail_advanced_oauth:
+            fields.add(FIELD_DAYS_BACK)
             fields.add(FIELD_GMAIL_CLIENT_SECRET_FILE)
+        else:
+            fields.add(FIELD_GMAIL_APP_PASSWORD)
+            fields.add(FIELD_GMAIL_FULL_MAILBOX)
+            if not gmail_full_mailbox:
+                fields.add(FIELD_DAYS_BACK)
         return frozenset(fields)
     if provider == MailProviderChoice.OUTLOOK:
         return frozenset(
@@ -178,6 +187,29 @@ def visible_setup_fields(provider: MailProviderChoice | None, gmail_advanced_oau
             }
         )
     return frozenset({FIELD_PERSON_LABEL, FIELD_USERNAME, FIELD_DAYS_BACK})
+
+
+def scan_scope_note(
+    provider: MailProviderChoice | None,
+    days_back: int = DEFAULT_GUI_SCAN_DAYS,
+    gmail_full_mailbox: bool = True,
+    gmail_advanced_oauth: bool = False,
+) -> str:
+    bounded_days = max(days_back, 1)
+    if provider == MailProviderChoice.GMAIL and gmail_full_mailbox and not gmail_advanced_oauth:
+        return (
+            "Scope: full Gmail mailbox. The app scans Gmail All Mail, not just recent Inbox messages. "
+            "Large mailboxes can take a few minutes."
+        )
+    if provider == MailProviderChoice.GMAIL and gmail_advanced_oauth:
+        return f"Scope: last {bounded_days} day(s) through Gmail OAuth. Increase the days for a broader free scan."
+    if provider == MailProviderChoice.GMAIL:
+        return f"Scope: last {bounded_days} day(s) of Gmail Inbox. Turn on full mailbox to scan Gmail All Mail."
+    if provider == MailProviderChoice.OUTLOOK:
+        return f"Scope: last {bounded_days} day(s) through Microsoft Graph. Increase the days for a broader free scan."
+    if provider == MailProviderChoice.OTHER_EMAIL:
+        return f"Scope: last {bounded_days} day(s) over IMAP. Increase only if your provider handles large scans well."
+    return "Choose a provider to see the scan scope before anything starts."
 
 
 def provider_setup_note(provider: MailProviderChoice | None, gmail_advanced_oauth: bool = False) -> str:
@@ -260,6 +292,18 @@ def build_provider_or_error(settings: MailProviderSettings) -> tuple[MailProvide
     if settings.provider == MailProviderChoice.GMAIL:
         client_secret_file = settings.gmail_client_secret_file.strip()
         client_secret_path = Path(client_secret_file).expanduser()
+        if settings.gmail_advanced_oauth:
+            if not client_secret_file or not client_secret_path.exists():
+                return None, UserFacingSetupError(
+                    user_message=(
+                        "Choose your Gmail OAuth client JSON file before starting the advanced scan. "
+                        "For personal Gmail, app password setup is simpler."
+                    ),
+                    technical_details=SETUP_DETAIL_MISSING_CLIENT_SECRET_FILE,
+                )
+            from .oauth_mail import GmailApiMailProvider, GmailOAuthConfig
+
+            return GmailApiMailProvider(GmailOAuthConfig(str(client_secret_path))), None
         if client_secret_file and client_secret_path.exists():
             from .oauth_mail import GmailApiMailProvider, GmailOAuthConfig
 
