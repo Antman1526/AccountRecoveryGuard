@@ -8,3 +8,5 @@ Guided desktop security assistant for scanning account-risk emails, rotating pas
 - Codex
 
 The application source lives in `account-recovery-guard/`.
+
+See `SECURITY.md` for malware, installer trust, and vulnerability reporting guidance.

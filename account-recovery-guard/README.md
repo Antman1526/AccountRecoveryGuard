@@ -129,6 +129,18 @@ Threat model:
 - Protects against reused passwords, stale compromised credentials, forgotten breach alerts, and vault drift between Bitwarden and NordPass.
 - Reduces local secret exposure by using OS credential storage and avoiding plaintext logs.
 - Does not protect against malware already running as your user, phishing pages you approve manually, compromised password-manager accounts, or provider-side account takeover.
+- This is not antivirus software. If malware, a keylogger, remote-control tooling, or a hostile browser extension is already running on the device, it can potentially observe local vaults, clipboard contents, browser sessions, and recovery workflows.
+
+## Malware and Installer Trust
+
+Use installers only from the official repository and verify checksums before running them:
+
+- GitHub repository: `https://github.com/Antman1526/AccountRecoveryGuard`
+- macOS: prefer a signed and notarized `.dmg`.
+- Windows: prefer a signed `.exe`; unsigned PyInstaller executables are development artifacts and may be quarantined by antivirus tools.
+- Keep Gatekeeper, XProtect, Microsoft Defender, and trusted endpoint protection enabled.
+- Do not bypass malware warnings unless you have verified the artifact source, checksum, and signing status.
+- See the root `SECURITY.md` for the release checklist and reporting process.
 
 ## Install: macOS
 
