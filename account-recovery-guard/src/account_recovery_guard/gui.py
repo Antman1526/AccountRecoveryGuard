@@ -868,20 +868,12 @@ def main() -> int:
                 return
 
             vault_service = self._build_vault_service()
-            bitwarden_result = vault_service.write_bitwarden(selected)
             nordpass_path = user_state_dir() / "nordpass-import.csv"
-            nordpass_result = vault_service.stage_nordpass_import(selected, nordpass_path)
-            status = VaultSyncStatus(
-                bitwarden=bitwarden_result.status.bitwarden,
-                nordpass=nordpass_result.status.nordpass,
-                verification="pending",
-                csv_path=nordpass_result.status.csv_path,
-            )
-            self.state = self.state.with_vault_status(status)
-            message = f"{bitwarden_result.user_message} {nordpass_result.user_message}"
+            sync_result = vault_service.prepare_guided_sync(selected, nordpass_path)
+            self.state = self.state.with_vault_status(sync_result.status)
             self._render_rotation_panel()
             if hasattr(self, "rotation_status_label"):
-                self.rotation_status_label.setText(message)
+                self.rotation_status_label.setText(sync_result.user_message)
             self._refresh_dashboard()
 
         def _build_vault_service(self) -> GuiVaultService:

@@ -511,6 +511,34 @@ class GuiVaultService:
             user_message="Bitwarden was updated. NordPass import is still needed.",
         )
 
+    def prepare_guided_sync(self, candidate: PasswordCandidate, destination: Path) -> GuiVaultWriteResult:
+        bitwarden_result = self.write_bitwarden(candidate)
+        if bitwarden_result.status.bitwarden != "updated":
+            return GuiVaultWriteResult(
+                status=VaultSyncStatus(
+                    bitwarden=bitwarden_result.status.bitwarden,
+                    nordpass="import_needed",
+                    verification="pending",
+                ),
+                user_message=(
+                    f"{bitwarden_result.user_message} NordPass CSV was not created, so no plaintext import "
+                    "file was left behind."
+                ),
+                technical_details=bitwarden_result.technical_details,
+            )
+
+        nordpass_result = self.stage_nordpass_import(candidate, destination)
+        return GuiVaultWriteResult(
+            status=VaultSyncStatus(
+                bitwarden="updated",
+                nordpass=nordpass_result.status.nordpass,
+                verification="pending",
+                csv_path=nordpass_result.status.csv_path,
+            ),
+            user_message=f"{bitwarden_result.user_message} {nordpass_result.user_message}",
+            technical_details=nordpass_result.technical_details,
+        )
+
     def stage_nordpass_import(self, candidate: PasswordCandidate, destination: Path) -> GuiVaultWriteResult:
         try:
             csv_path = self.nordpass.stage_import([candidate], destination)

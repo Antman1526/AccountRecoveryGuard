@@ -168,7 +168,7 @@ class VaultSyncStatus:
 
     @property
     def requires_csv_cleanup(self) -> bool:
-        return self.nordpass in {"csv_prepared", "waiting_for_import", "export_needed"}
+        return self.nordpass in {"csv_prepared", "waiting_for_import"} and self.csv_path is not None
 
     @property
     def cleanup_message(self) -> str:

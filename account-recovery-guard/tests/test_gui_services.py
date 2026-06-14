@@ -50,6 +50,11 @@ class FakeBitwardenFailure:
         raise VaultError("BW_SESSION is not set. token=super-secret-value")
 
 
+class FakeNordPassFailure:
+    def stage_import(self, candidates, destination):
+        raise OSError("disk full password=Secret123!")
+
+
 class FakePwnedPasswordChecker:
     def __init__(self, count=0, failure=False):
         self.count = count
@@ -429,6 +434,53 @@ def test_vault_service_stages_nordpass_import_without_echoing_password(tmp_path)
     assert "Secret123" not in result.user_message
     assert "Secret123" not in result.technical_details
     assert "delete the CSV" in result.user_message
+
+
+def test_guided_vault_sync_does_not_stage_nordpass_when_bitwarden_is_not_ready(tmp_path):
+    candidate = PasswordCandidate("Dropbox", "me@example.com", "https://dropbox.com", "Secret123!", "note")
+    destination = tmp_path / "nordpass-import.csv"
+
+    result = GuiVaultService(bitwarden=None).prepare_guided_sync(candidate, destination)
+
+    assert result.status.bitwarden == "not_configured"
+    assert result.status.nordpass == "import_needed"
+    assert result.status.csv_path is None
+    assert not result.status.requires_csv_cleanup
+    assert not destination.exists()
+    assert "CSV was not created" in result.user_message
+    assert "Secret123" not in result.user_message
+
+
+def test_guided_vault_sync_stages_nordpass_only_after_bitwarden_success(tmp_path):
+    candidate = PasswordCandidate("Dropbox", "me@example.com", "https://dropbox.com", "Secret123!", "note")
+    destination = tmp_path / "nordpass-import.csv"
+
+    result = GuiVaultService(bitwarden=FakeBitwardenSuccess()).prepare_guided_sync(candidate, destination)
+
+    assert result.status.bitwarden == "updated"
+    assert result.status.nordpass == "csv_prepared"
+    assert result.status.csv_path == str(destination)
+    assert result.status.requires_csv_cleanup
+    assert destination.exists()
+    assert "Secret123" not in result.user_message
+
+
+def test_guided_vault_sync_does_not_require_cleanup_when_csv_stage_fails(tmp_path):
+    candidate = PasswordCandidate("Dropbox", "me@example.com", "https://dropbox.com", "Secret123!", "note")
+    destination = tmp_path / "nordpass-import.csv"
+
+    result = GuiVaultService(bitwarden=FakeBitwardenSuccess(), nordpass=FakeNordPassFailure()).prepare_guided_sync(
+        candidate,
+        destination,
+    )
+
+    assert result.status.bitwarden == "updated"
+    assert result.status.nordpass == "export_needed"
+    assert result.status.csv_path is None
+    assert not result.status.requires_csv_cleanup
+    assert not destination.exists()
+    assert "Secret123" not in result.user_message
+    assert result.technical_details == "nordpass_csv_stage_failed"
 
 
 def test_vault_service_sanitizes_failure_details():

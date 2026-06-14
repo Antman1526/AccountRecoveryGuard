@@ -473,7 +473,12 @@ def test_rotation_session_stores_choices_immutably():
 
 
 def test_vault_sync_status_guides_nordpass_import_honestly():
-    status = VaultSyncStatus(bitwarden="updated", nordpass="csv_prepared", verification="pending")
+    status = VaultSyncStatus(
+        bitwarden="updated",
+        nordpass="csv_prepared",
+        verification="pending",
+        csv_path="/tmp/nordpass.csv",
+    )
 
     assert status.primary_message == "Bitwarden updated. Import the prepared NordPass CSV next."
     assert status.requires_csv_cleanup is True
@@ -489,6 +494,17 @@ def test_vault_sync_status_cleanup_message_includes_staged_csv_path():
 
     assert status.requires_csv_cleanup is True
     assert "/tmp/nordpass.csv" in status.cleanup_message
+
+
+def test_vault_sync_status_does_not_require_cleanup_without_csv_path():
+    status = VaultSyncStatus(
+        bitwarden="updated",
+        nordpass="export_needed",
+        verification="pending",
+        csv_path=None,
+    )
+
+    assert status.requires_csv_cleanup is False
 
 
 def test_app_state_records_vault_status_update():
