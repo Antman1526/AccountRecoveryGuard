@@ -11,11 +11,23 @@ from urllib.parse import urlsplit, urlunsplit
 from .paths import user_log_path
 
 SENSITIVE_KEYS = {"password", "token", "secret", "session", "authorization", "cookie"}
+PII_FIELD_KEYS = {
+    "account_email",
+    "email",
+    "email_address",
+    "mailbox",
+    "mailbox_address",
+    "mailbox_name",
+    "user_email",
+    "user_name",
+    "username",
+}
 SENSITIVE_ASSIGNMENT_PATTERN = re.compile(
     r"(?i)\b(password|token|secret|session|authorization|cookie|api[_-]?key|access[_-]?token|refresh[_-]?token)=([^\s&]+)"
 )
 SENSITIVE_BEARER_PATTERN = re.compile(r"(?i)\bBearer\s+[A-Za-z0-9._~+/-]+=*")
 URL_PATTERN = re.compile(r"https?://[^\s\"'<>]+")
+EMAIL_PATTERN = re.compile(r"(?i)\b[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}\b")
 
 
 class AuditLogger:
@@ -40,7 +52,7 @@ class AuditLogger:
 def redact(value: Any) -> Any:
     if isinstance(value, dict):
         return {
-            key: "[REDACTED]" if any(marker in key.lower() for marker in SENSITIVE_KEYS) else redact(item)
+            key: _redact_named_value(key, item)
             for key, item in value.items()
         }
     if isinstance(value, list):
@@ -50,10 +62,30 @@ def redact(value: Any) -> Any:
     return value
 
 
+def _redact_named_value(key: str, value: Any) -> Any:
+    normalized_key = key.lower()
+    if any(marker in normalized_key for marker in SENSITIVE_KEYS):
+        return "[REDACTED]"
+    if _is_pii_field_key(normalized_key):
+        return "[REDACTED]"
+    return redact(value)
+
+
+def _is_pii_field_key(normalized_key: str) -> bool:
+    return (
+        normalized_key in PII_FIELD_KEYS
+        or normalized_key.endswith("_email")
+        or normalized_key.endswith("_email_address")
+        or normalized_key.endswith("_mailbox")
+        or normalized_key.endswith("_username")
+    )
+
+
 def redact_string(value: str) -> str:
     redacted = URL_PATTERN.sub(_redact_url, value)
     redacted = SENSITIVE_BEARER_PATTERN.sub("Bearer [REDACTED]", redacted)
     redacted = SENSITIVE_ASSIGNMENT_PATTERN.sub(lambda match: f"{match.group(1)}=[REDACTED]", redacted)
+    redacted = EMAIL_PATTERN.sub("[EMAIL_REDACTED]", redacted)
     return redacted
 
 

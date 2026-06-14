@@ -133,7 +133,7 @@ MFA:
 Logging:
 
 - Audit logs are JSONL and include events such as scan count, vault update, NordPass CSV staging, and sync result.
-- Passwords, tokens, secrets, sessions, authorization headers, cookies, reset-link parameters, and token-like values embedded in messages are redacted.
+- Passwords, tokens, secrets, sessions, authorization headers, cookies, email addresses, usernames, mailbox identifiers, reset-link parameters, and token-like values embedded in messages are redacted.
 - Email bodies and plaintext credentials are never written to the audit log.
 
 Threat model:
