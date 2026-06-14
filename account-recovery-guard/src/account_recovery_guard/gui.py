@@ -6,7 +6,13 @@ from pathlib import Path
 
 from .clipboard import copy_text
 from .exposure import SAFE_EXPOSURE_BOUNDARY
-from .gui_workflow import build_command_preview, password_exposure_prompt_lines, recovery_stages, suggested_next_actions
+from .gui_workflow import (
+    build_command_preview,
+    password_exposure_prompt_lines,
+    recovery_stages,
+    safe_recovery_scope_lines,
+    suggested_next_actions,
+)
 from .gui_theme import calm_shield_stylesheet
 from .passkeys import passkey_guidance
 from .paths import user_state_dir
@@ -136,6 +142,11 @@ def main() -> int:
             ):
                 trust.body.addWidget(self._body_label(line, "listText"))
             layout.addWidget(trust)
+
+            safe_scope = Card("Safe recovery scope")
+            for line in safe_recovery_scope_lines():
+                safe_scope.body.addWidget(self._body_label(line, "listText"))
+            layout.addWidget(safe_scope)
 
             checklist = Card("Protection checklist")
             self._fill_checklist_card(checklist)

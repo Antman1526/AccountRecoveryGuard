@@ -82,3 +82,12 @@ def password_exposure_prompt_lines(count: int | None = None) -> list[str]:
     if count > 0:
         return lines + ["If it is found, rotate only the accounts where you reused that password."]
     return lines + ["If it is not found, still rotate accounts with suspicious mailbox alerts."]
+
+
+def safe_recovery_scope_lines() -> list[str]:
+    return [
+        "The safe path is mailbox evidence plus the free HIBP k-anonymous password check.",
+        "The app does not crawl the whole web, dark-web dumps, private forums, or paste sites for plaintext passwords.",
+        "That boundary protects you from unsafe sources, unreliable results, and exposing credentials further.",
+        "Start by scanning one authorized mailbox, then rotate only accounts with clear risk signals or reused exposed passwords.",
+    ]

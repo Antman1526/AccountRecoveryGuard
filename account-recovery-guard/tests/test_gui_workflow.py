@@ -1,6 +1,6 @@
 from account_recovery_guard.gui_workflow import build_command_preview
 from account_recovery_guard.gui_workflow import password_exposure_prompt_lines
-from account_recovery_guard.gui_workflow import recovery_stages, suggested_next_actions
+from account_recovery_guard.gui_workflow import recovery_stages, safe_recovery_scope_lines, suggested_next_actions
 
 
 def test_build_command_preview_escapes_values_for_copyable_cli():
@@ -51,3 +51,14 @@ def test_password_exposure_prompt_guides_rotation_without_overreach():
     assert "where you reused that password" in found_text
     assert "all sites" not in found_text
     assert "suspicious mailbox alerts" in clean_text
+
+
+def test_safe_recovery_scope_is_clear_on_first_launch():
+    text = " ".join(safe_recovery_scope_lines()).lower()
+
+    assert "mailbox evidence" in text
+    assert "free hibp" in text
+    assert "does not crawl the whole web" in text
+    assert "dark-web dumps" in text
+    assert "exposing credentials further" in text
+    assert "one authorized mailbox" in text

@@ -269,6 +269,7 @@ account-recovery-guard-gui
 The GUI opens to a guided first-run flow:
 
 - Follow a protection checklist for email connection, local scan, account review, password exposure check, and vault sync.
+- See the safe recovery boundary on first launch: authorized mailbox evidence plus free HIBP k-anonymous checks, not unsafe whole-web or dark-web crawling.
 - Label who the scan is for, using quick choices like `Me` or `Second person`, without creating a stored profile.
 - Protect one mailbox at a time; run a separate scan for a second person only when they are present and have asked you to help.
 - Connect Gmail, Outlook, or Other Email.
