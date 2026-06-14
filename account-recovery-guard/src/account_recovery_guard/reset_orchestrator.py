@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import asyncio
-from urllib.parse import unquote, urlparse
+from urllib.parse import parse_qsl, unquote, urlparse
 
 from .domain_safety import redirect_target_values, safe_reset_link_matches_domain
 from .models import CompromisedAccountFinding, ResetWorkflow
@@ -120,8 +120,33 @@ def validate_browser_reset_link(reset_link: str, expected_domain_or_url: str | N
 
 def is_blocked_recovery_download_url(url: str) -> bool:
     parsed = urlparse(url)
-    path = unquote(parsed.path).lower()
+    if _looks_like_blocked_download_path(parsed.path):
+        return True
+    return any(
+        _looks_like_blocked_download_path(_path_like_value(value))
+        for value in _query_and_fragment_values(parsed.query, parsed.fragment)
+    )
+
+
+def _looks_like_blocked_download_path(value: str) -> bool:
+    path = unquote(value).lower().rstrip("/")
     return any(path.endswith(extension) for extension in BLOCKED_RECOVERY_DOWNLOAD_EXTENSIONS)
+
+
+def _path_like_value(value: str) -> str:
+    parsed = urlparse(value)
+    if parsed.scheme.lower() in {"http", "https"} and parsed.netloc:
+        return parsed.path
+    return value
+
+
+def _query_and_fragment_values(*encoded_parts: str) -> tuple[str, ...]:
+    values: list[str] = []
+    for encoded in encoded_parts:
+        if not encoded or "=" not in encoded:
+            continue
+        values.extend(value.strip() for _, value in parse_qsl(encoded, keep_blank_values=False))
+    return tuple(values)
 
 
 async def _block_recovery_downloads(route) -> None:

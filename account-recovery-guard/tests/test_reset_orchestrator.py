@@ -76,6 +76,9 @@ def test_browser_reset_link_validation_rejects_unsafe_redirect():
         "https://example.com/recovery/reset-kit.zip?token=abc",
         "https://example.com/account/password-reset.dmg",
         "https://example.com/scripts/recover-account.ps1",
+        "https://example.com/download?file=security-update.exe",
+        "https://example.com/download?url=https%3A%2F%2Fexample.com%2Freset-kit.zip",
+        "https://example.com/recover#file=password-reset.dmg",
     ),
 )
 def test_browser_reset_link_validation_rejects_direct_download_urls(url):
@@ -108,6 +111,11 @@ def test_recovery_browser_blocks_common_malware_download_urls():
     assert is_blocked_recovery_download_url("https://example.com/download/security-update.exe") is True
     assert is_blocked_recovery_download_url("https://example.com/files/recovery%20tool.pkg") is True
     assert is_blocked_recovery_download_url("https://example.com/archive/reset-kit.zip?token=abc") is True
+    assert is_blocked_recovery_download_url("https://example.com/download?file=security-update.exe") is True
+    assert is_blocked_recovery_download_url(
+        "https://example.com/download?url=https%3A%2F%2Fexample.com%2Frecovery%2Freset-kit.zip"
+    ) is True
+    assert is_blocked_recovery_download_url("https://example.com/recover#file=password-reset.dmg") is True
     assert is_blocked_recovery_download_url("https://example.com/account/reset") is False
 
 
