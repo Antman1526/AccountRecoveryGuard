@@ -366,6 +366,7 @@ def test_scan_service_counts_unique_discovered_and_risky_services():
     summary = service.scan(days_back=30)
 
     assert summary.total_accounts_found == 2
+    assert [account.service_name for account in summary.discovered_accounts] == ["github"]
 
 
 def test_scan_failure_message_is_generic_for_user_display():

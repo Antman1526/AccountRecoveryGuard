@@ -10,7 +10,7 @@ from account_recovery_guard.gui_state import (
     VaultSyncStatus,
     requires_second_person_consent,
 )
-from account_recovery_guard.models import CompromisedAccountFinding, PasswordCandidate
+from account_recovery_guard.models import CompromisedAccountFinding, DiscoveredAccount, PasswordCandidate
 
 
 def _password_candidates() -> list[PasswordCandidate]:
@@ -294,6 +294,32 @@ def test_scan_summary_builds_ordered_account_reviews_for_results_list():
     assert [review.service_name for review in reviews] == ["Dropbox", "Github"]
     assert reviews[0].risk_label == "Needs attention"
     assert reviews[1].risk_label == "Review recommended"
+
+
+def test_scan_summary_preserves_discovered_accounts_separately_from_alerts():
+    finding = CompromisedAccountFinding(
+        service_name="dropbox",
+        sender_domain="dropbox.com",
+        sender="security@dropbox.com",
+        subject="Suspicious login",
+        timestamp=datetime(2026, 6, 13, tzinfo=UTC),
+        severity="high",
+        reasons=["suspicious activity"],
+    )
+    discovered = DiscoveredAccount(
+        service_name="github",
+        sender_domain="github.com",
+        message_count=2,
+        confidence="high",
+        reasons=["account verification email"],
+    )
+
+    summary = ScanSummary.from_findings([finding], discovered_count=2, discovered_accounts=[discovered])
+
+    assert summary.total_accounts_found == 2
+    assert summary.accounts_needing_attention == 1
+    assert summary.discovered_accounts == (discovered,)
+    assert [review.service_name for review in summary.account_reviews("me@example.com")] == ["Dropbox"]
 
 
 def test_scan_summary_next_safest_action_is_plain_language():

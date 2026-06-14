@@ -4,7 +4,7 @@ from dataclasses import dataclass, field, replace
 from enum import StrEnum
 
 from .domain_safety import https_url_matches_domain
-from .models import CompromisedAccountFinding, PasswordCandidate, RotationChoiceSummary
+from .models import CompromisedAccountFinding, DiscoveredAccount, PasswordCandidate, RotationChoiceSummary
 from .rotation import summarize_rotation_choices
 
 
@@ -75,15 +75,22 @@ class ScanSummary:
     total_accounts_found: int
     accounts_needing_attention: int
     recommended: CompromisedAccountFinding | None
+    discovered_accounts: tuple[DiscoveredAccount, ...] = ()
 
     @classmethod
-    def from_findings(cls, findings: list[CompromisedAccountFinding], discovered_count: int) -> "ScanSummary":
+    def from_findings(
+        cls,
+        findings: list[CompromisedAccountFinding],
+        discovered_count: int,
+        discovered_accounts: list[DiscoveredAccount] | tuple[DiscoveredAccount, ...] | None = None,
+    ) -> "ScanSummary":
         ordered = sorted(findings, key=lambda item: _severity_rank(item.severity), reverse=True)
         return cls(
             findings=tuple(ordered),
             total_accounts_found=discovered_count,
             accounts_needing_attention=len(ordered),
             recommended=ordered[0] if ordered else None,
+            discovered_accounts=tuple(discovered_accounts or ()),
         )
 
     @property

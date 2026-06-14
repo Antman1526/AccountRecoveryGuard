@@ -463,7 +463,7 @@ class GuiScanService:
         discovered_services = {account.service_name.casefold() for account in accounts if account.service_name}
         risky_services = {finding.service_name.casefold() for finding in findings if finding.service_name}
         discovered_count = len(discovered_services | risky_services)
-        return ScanSummary.from_findings(findings, discovered_count=discovered_count)
+        return ScanSummary.from_findings(findings, discovered_count=discovered_count, discovered_accounts=accounts)
 
 
 def scan_progress_stages() -> list[str]:

@@ -597,6 +597,9 @@ def main() -> int:
                 )
             )
             self.results_layout.addWidget(self._protection_plan_card())
+            linked_accounts = self._linked_accounts_card(summary)
+            if linked_accounts is not None:
+                self.results_layout.addWidget(linked_accounts)
             if summary.recommended is None:
                 self._render_empty_results(summary)
                 return
@@ -668,6 +671,9 @@ def main() -> int:
                 subtitle = summary.attention_text if summary else "Results will appear here after the scanner finishes."
                 self.results_layout.addWidget(StepHeader(title, subtitle, "Step 3 of 3"))
                 self.results_layout.addWidget(self._protection_plan_card(summary))
+                linked_accounts = self._linked_accounts_card(summary)
+                if linked_accounts is not None:
+                    self.results_layout.addWidget(linked_accounts)
                 empty = Card("No accounts need attention" if summary else "No results yet")
                 empty.body.addWidget(
                     self._body_label(
@@ -697,6 +703,43 @@ def main() -> int:
                 button_row.addWidget(dashboard)
                 self.results_layout.addLayout(button_row)
                 self.results_layout.addStretch(1)
+
+        def _linked_accounts_card(self, summary: ScanSummary | None) -> Card | None:
+            if summary is None or not summary.discovered_accounts:
+                return None
+            card = Card("Linked accounts found")
+            card.body.addWidget(
+                self._body_label(
+                    "These websites appeared in authorized mailbox evidence. This does not mean they were compromised.",
+                    "listText",
+                )
+            )
+            for index, account in enumerate(summary.discovered_accounts[:8], start=1):
+                row = QFrame()
+                row.setObjectName("accountRow")
+                row_layout = QHBoxLayout(row)
+                row_layout.setContentsMargins(12, 10, 12, 10)
+                row_layout.setSpacing(10)
+                text_col = QVBoxLayout()
+                title = QLabel(f"{index}. {account.service_name.title()}")
+                title.setObjectName("rowTitle")
+                title.setWordWrap(True)
+                reasons = ", ".join(account.reasons[:3]) if account.reasons else "mailbox evidence"
+                detail = QLabel(f"{account.sender_domain} - {account.confidence} confidence - {reasons}")
+                detail.setObjectName("listText")
+                detail.setWordWrap(True)
+                text_col.addWidget(title)
+                text_col.addWidget(detail)
+                row_layout.addLayout(text_col, 1)
+                card.body.addWidget(row)
+            if len(summary.discovered_accounts) > 8:
+                card.body.addWidget(
+                    self._body_label(
+                        f"{len(summary.discovered_accounts) - 8} more linked accounts are hidden to keep this view focused.",
+                        "listText",
+                    )
+                )
+            return card
 
         def _clear_layout(self, layout) -> None:
             while layout.count():

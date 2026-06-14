@@ -284,6 +284,7 @@ The GUI opens to a guided first-run flow:
 - Confirm you have permission to scan the selected mailbox before the scan can start.
 - Review scan consent and provider setup before scanning starts.
 - Review a clear next safest action plus the accounts needing attention found by the scan.
+- Review linked accounts found from mailbox evidence separately from accounts needing attention, so ordinary account evidence is not treated as proof of compromise.
 - Read a plain-English protection plan that separates what the app knows, what it cannot prove, the next safe action, and the guardrail that keeps recovery local-first.
 - Interpret scan results safely: mailbox findings are risk signals, and "no urgent alerts" does not prove every password is safe.
 - Read safe `http`/`https` links from HTML email buttons so security alerts with button-only reset links are not missed.
