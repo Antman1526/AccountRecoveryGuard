@@ -76,6 +76,15 @@ The `pwned-password` command uses the HIBP Pwned Passwords k-anonymity range API
 
 Risk scoring combines mailbox findings, discovery confidence, breach names, reused-password evidence, and MFA unknown status. Scores are local signals for prioritization, not proof of compromise.
 
+The `exposure-plan` command is the safe replacement for "search the whole web for my password." It combines:
+
+- authorized mailbox scan results,
+- discovered accounts from your mailbox,
+- HIBP breached-account results,
+- optional HIBP Pwned Passwords checks.
+
+It does not crawl paste sites, dark-web sources, criminal forums, or random web pages for plaintext passwords. That boundary is deliberate: those sources can expose you further, produce unreliable data, and create legal/security risk. The app uses reputable breach intelligence and tells you which accounts to rotate first.
+
 ## Vault Integration
 
 Bitwarden:
@@ -280,6 +289,19 @@ arg secret candidate-password "PASTE_CANDIDATE"
 arg pwned-password --password-secret candidate-password --hibp-secret hibp-api-key
 ```
 
+Create a safe exposure plan from mailbox scan JSON plus HIBP:
+
+```bash
+arg exposure-plan \
+  --email you@example.com \
+  --hibp-secret hibp-api-key \
+  --password-secret candidate-password \
+  --accounts-json accounts.json \
+  --findings-json findings.json
+```
+
+The exposure plan prioritizes accounts to rotate. If the checked password appears in HIBP Pwned Passwords, rotate every account where you used that password.
+
 Rotate with five local password choices:
 
 ```bash
@@ -414,6 +436,7 @@ account-recovery-guard/
     clipboard.py                     Clipboard copy with delayed clear where supported.
     cli.py                          Cross-platform command-line interface.
     email_scanner.py                IMAP scanner, body extraction, classifier, link extraction.
+    exposure.py                     Safe exposure report combining mailbox evidence and breach intelligence.
     gui.py                          PySide6 guided desktop dashboard.
     gui_workflow.py                 Shared GUI workflow copy and command preview helpers.
     models.py                       Dataclasses shared across modules.
@@ -433,6 +456,7 @@ account-recovery-guard/
     test_account_discovery.py       Verifies account discovery from inbox signals.
     test_breach_checker.py          Verifies HIBP parsing and 404 behavior.
     test_email_classifier.py        Verifies risky email classification and reset-link extraction.
+    test_exposure.py                Verifies safe exposure-plan recommendations and boundaries.
     test_passwords.py               Verifies password/passphrase generation constraints.
     test_rotation.py                Verifies five unique password choices.
     test_rotation_safety.py         Verifies masked password choice display.

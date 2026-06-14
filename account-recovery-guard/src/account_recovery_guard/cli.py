@@ -9,6 +9,7 @@ from .audit import AuditLogger
 from .breach_checker import HibpBreachChecker
 from .clipboard import copy_text
 from .email_scanner import ImapEmailScanner, ImapMailboxConfig
+from .exposure import ExposureReport, build_exposure_report
 from .gui import main as gui_main
 from .live_vault_test import build_live_test_candidate, preflight, summarize_preflight
 from .models import PasswordCandidate, VaultEntry
@@ -85,6 +86,17 @@ def main() -> None:
     pwned_password = sub.add_parser("pwned-password", help="Check a password against HIBP Pwned Passwords k-anonymity API")
     pwned_password.add_argument("--password-secret", required=True)
     pwned_password.add_argument("--hibp-secret", required=True)
+
+    exposure = sub.add_parser(
+        "exposure-plan",
+        help="Safely combine mailbox findings and HIBP checks into a prioritized password-rotation plan",
+    )
+    exposure.add_argument("--email", required=True)
+    exposure.add_argument("--hibp-secret", required=True, help="OS-keychain secret containing the HIBP API key")
+    exposure.add_argument("--password-secret", help="Optional OS-keychain secret containing a password to check with HIBP k-anonymity")
+    exposure.add_argument("--accounts-json", help="Optional JSON output from discover-imap")
+    exposure.add_argument("--findings-json", help="Optional JSON output from scan-imap, scan-gmail-app-password, scan-gmail, or scan-graph")
+    exposure.add_argument("--json", action="store_true")
 
     generate = sub.add_parser("generate-password", help="Generate a replacement password")
     generate.add_argument("--length", type=int, default=32)
@@ -163,6 +175,8 @@ def main() -> None:
         _breach_check(args)
     elif args.command == "pwned-password":
         _pwned_password(args)
+    elif args.command == "exposure-plan":
+        _exposure_plan(args)
     elif args.command == "generate-password":
         if args.passphrase:
             print(generate_passphrase(word_count=args.words))
@@ -304,6 +318,34 @@ def _pwned_password(args: argparse.Namespace) -> None:
         print(f"Password appears {count} time(s) in HIBP Pwned Passwords. Do not use it.")
     else:
         print("Password was not found in HIBP Pwned Passwords.")
+
+
+def _exposure_plan(args: argparse.Namespace) -> None:
+    api_key = get_secret(args.hibp_secret)
+    if not api_key:
+        raise SystemExit(f"Secret '{args.hibp_secret}' was not found.")
+    checker = HibpBreachChecker(api_key)
+    breaches = checker.breaches_for_account(args.email)
+    pwned_count = None
+    if args.password_secret:
+        password = get_secret(args.password_secret)
+        if not password:
+            raise SystemExit(f"Secret '{args.password_secret}' was not found.")
+        pwned_count = checker.pwned_password_count(password)
+    accounts = _load_discovered_accounts(Path(args.accounts_json)) if args.accounts_json else []
+    findings = _load_findings(Path(args.findings_json)) if args.findings_json else []
+    report = build_exposure_report(args.email, breaches, accounts, findings, pwned_count)
+    AuditLogger().write(
+        "exposure_plan",
+        email=args.email,
+        breach_count=report.breach_count,
+        password_pwned_count=report.password_pwned_count,
+        rotation_count=report.rotation_count,
+    )
+    if args.json:
+        print(json.dumps(_exposure_report_to_dict(report), indent=2, default=str))
+        return
+    _print_exposure_report(report)
 
 
 def _workflow(args: argparse.Namespace) -> None:
@@ -453,6 +495,71 @@ def _finding_to_dict(finding) -> dict[str, object]:
         "reset_link": finding.reset_link,
         "message_id": finding.message_id,
     }
+
+
+def _exposure_report_to_dict(report: ExposureReport) -> dict[str, object]:
+    return {
+        "email_address": report.email_address,
+        "breach_count": report.breach_count,
+        "password_pwned_count": report.password_pwned_count,
+        "rotation_count": report.rotation_count,
+        "safety_boundary": report.safety_boundary,
+        "recommendations": [
+            {
+                "service_name": item.service_name,
+                "sender_domain": item.sender_domain,
+                "priority": item.priority,
+                "rotate": item.rotate,
+                "reasons": list(item.reasons),
+            }
+            for item in report.recommendations
+        ],
+    }
+
+
+def _print_exposure_report(report: ExposureReport) -> None:
+    print(f"Safe exposure plan for {report.email_address}")
+    print(report.safety_boundary)
+    print(f"HIBP breaches for email: {report.breach_count}")
+    if report.password_pwned_count is None:
+        print("Password exposure check: not run")
+    elif report.password_pwned_count:
+        print(f"Password exposure check: found {report.password_pwned_count} time(s); rotate any account using it")
+    else:
+        print("Password exposure check: not found in HIBP Pwned Passwords")
+    if not report.recommendations:
+        print("No services were available to prioritize. Run a mailbox scan/discovery and pass the JSON outputs.")
+        return
+    print("Rotation priorities:")
+    for item in report.recommendations:
+        action = "ROTATE" if item.rotate else "review"
+        domain = f" ({item.sender_domain})" if item.sender_domain else ""
+        print(f"- [{item.priority}] {action}: {item.service_name}{domain}")
+        for reason in item.reasons:
+            print(f"  reason: {reason}")
+
+
+def _load_discovered_accounts(path: Path):
+    from .models import DiscoveredAccount
+
+    data = json.loads(path.read_text(encoding="utf-8"))
+    accounts = []
+    for item in data:
+        accounts.append(
+            DiscoveredAccount(
+                service_name=str(item.get("service_name", "")),
+                sender_domain=str(item.get("sender_domain", "")),
+                message_count=int(item.get("message_count", 0)),
+                confidence=item.get("confidence", "low"),
+                reasons=[str(reason) for reason in item.get("reasons", [])],
+            )
+        )
+    return accounts
+
+
+def _load_findings(path: Path):
+    data = json.loads(path.read_text(encoding="utf-8"))
+    return [_finding_from_dict(item) for item in data]
 
 
 def _finding_from_dict(data: dict[str, object]):

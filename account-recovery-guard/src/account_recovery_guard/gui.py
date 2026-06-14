@@ -5,6 +5,7 @@ import webbrowser
 from pathlib import Path
 
 from .clipboard import copy_text
+from .exposure import SAFE_EXPOSURE_BOUNDARY
 from .gui_workflow import build_command_preview, recovery_stages, suggested_next_actions
 from .gui_theme import calm_shield_stylesheet
 from .passkeys import passkey_guidance
@@ -1105,6 +1106,7 @@ def main() -> int:
             limit_cards = (
                 ("Passkeys", "Store passkeys in your phone or OS account where the service supports it; do not export them through this app."),
                 ("MFA", "The app can open reset links, but you complete MFA challenges yourself."),
+                ("Exposure intelligence", "Use authorized mailbox evidence and HIBP checks; do not crawl hostile password dumps."),
                 ("NordPass", "Personal-vault writes are staged as CSV because NordPass does not provide a public personal-vault CRUD API."),
                 ("Logs", "Audit events record actions and counts, never plaintext passwords or token values."),
             )
@@ -1121,6 +1123,65 @@ def main() -> int:
                 label.setWordWrap(True)
                 passkey_layout.addWidget(label)
             layout.addWidget(passkey_box)
+
+            exposure_box = QGroupBox("Safe exposure plan")
+            exposure_box.setObjectName("group")
+            exposure_layout = QGridLayout(exposure_box)
+            exposure_email = QLineEdit("you@example.com")
+            exposure_hibp_secret = QLineEdit("hibp-api-key")
+            exposure_password_secret = QLineEdit("")
+            exposure_password_secret.setPlaceholderText("Optional password secret name")
+            exposure_accounts_json = QLineEdit("accounts.json")
+            exposure_findings_json = QLineEdit("findings.json")
+            exposure_preview = self._command_box()
+
+            def update_exposure_preview() -> None:
+                exposure_preview.setText(
+                    build_command_preview(
+                        "exposure-plan",
+                        {
+                            "email": exposure_email.text(),
+                            "hibp_secret": exposure_hibp_secret.text(),
+                            "password_secret": exposure_password_secret.text(),
+                            "accounts_json": exposure_accounts_json.text(),
+                            "findings_json": exposure_findings_json.text(),
+                            "json": True,
+                        },
+                    )
+                )
+
+            for widget in (
+                exposure_email,
+                exposure_hibp_secret,
+                exposure_password_secret,
+                exposure_accounts_json,
+                exposure_findings_json,
+            ):
+                widget.textChanged.connect(update_exposure_preview)
+            exposure_fields = (
+                ("Email", exposure_email),
+                ("HIBP secret name", exposure_hibp_secret),
+                ("Password secret name", exposure_password_secret),
+                ("Discovered accounts JSON", exposure_accounts_json),
+                ("Mailbox findings JSON", exposure_findings_json),
+            )
+            for row, (label, widget) in enumerate(exposure_fields):
+                exposure_layout.addWidget(QLabel(label), row, 0)
+                exposure_layout.addWidget(widget, row, 1)
+            exposure_note = QLabel(SAFE_EXPOSURE_BOUNDARY)
+            exposure_note.setObjectName("listText")
+            exposure_note.setWordWrap(True)
+            exposure_layout.addWidget(exposure_note, len(exposure_fields), 0, 1, 2)
+            exposure_layout.addWidget(QLabel("Command"), len(exposure_fields) + 1, 0)
+            exposure_layout.addWidget(exposure_preview, len(exposure_fields) + 1, 1)
+            exposure_layout.addWidget(
+                self._copy_button("Copy exposure command", exposure_preview.toPlainText),
+                len(exposure_fields) + 2,
+                1,
+                alignment=Qt.AlignmentFlag.AlignRight,
+            )
+            update_exposure_preview()
+            layout.addWidget(exposure_box)
 
             csv_warning = QLabel(plaintext_file_warning(Path("nordpass-import.csv")) or "No stale NordPass CSV detected in the current folder.")
             csv_warning.setObjectName("warningText")

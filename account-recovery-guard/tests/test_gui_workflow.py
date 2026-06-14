@@ -18,6 +18,7 @@ def test_recovery_stages_explain_original_goal_end_to_end():
         "Sync both vaults",
         "Verify and clean up",
     ]
+    assert "exposure-plan" in stages[1].command
     assert stages[3].status == "manual"
     assert "NordPass import" in stages[3].detail
 

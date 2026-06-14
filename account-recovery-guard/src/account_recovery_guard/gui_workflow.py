@@ -38,8 +38,8 @@ def recovery_stages() -> list[RecoveryStage]:
         RecoveryStage(
             title="Find risky accounts",
             status="automated",
-            detail="Classify breach notices, suspicious logins, password resets, and account access alerts.",
-            command="discover-imap, breach-check",
+            detail="Classify risky mailbox signals and build a safe exposure plan from breach intelligence.",
+            command="discover-imap, breach-check, exposure-plan",
         ),
         RecoveryStage(
             title="Rotate passwords",
