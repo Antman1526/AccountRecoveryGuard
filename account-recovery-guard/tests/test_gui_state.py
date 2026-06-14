@@ -36,6 +36,25 @@ def test_provider_selection_moves_to_consent_without_scanning():
     assert state.scan_started is False
 
 
+def test_protected_person_label_is_safe_and_nonempty():
+    state = GuiAppState.new().with_protected_person("  spouse   mailbox  ")
+
+    assert state.protected_person_label == "spouse mailbox"
+    assert state.protected_person_prefix == "spouse mailbox: "
+
+
+def test_blank_protected_person_label_defaults_to_me():
+    state = GuiAppState.new().with_protected_person("   ")
+
+    assert state.protected_person_label == "Me"
+
+
+def test_long_protected_person_label_is_bounded():
+    state = GuiAppState.new().with_protected_person("x" * 100)
+
+    assert len(state.protected_person_label) == 40
+
+
 def test_scan_cannot_start_without_provider_selection():
     state = GuiAppState.new()
 

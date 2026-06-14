@@ -134,6 +134,7 @@ class VaultSyncStatus:
 @dataclass(frozen=True)
 class GuiAppState:
     current_step: GuiStep
+    protected_person_label: str = "Me"
     mail_provider: MailProviderChoice | None = None
     scan_started: bool = False
     scan_summary: ScanSummary | None = None
@@ -151,6 +152,13 @@ class GuiAppState:
 
     def with_mail_provider(self, provider: MailProviderChoice) -> "GuiAppState":
         return replace(self, mail_provider=provider, current_step=GuiStep.SCAN_CONSENT, scan_started=False)
+
+    def with_protected_person(self, label: str) -> "GuiAppState":
+        return replace(self, protected_person_label=_normalize_person_label(label))
+
+    @property
+    def protected_person_prefix(self) -> str:
+        return f"{self.protected_person_label}: "
 
     @property
     def consent_summary(self) -> str:
@@ -207,3 +215,10 @@ def _risk_label(severity: str) -> str:
 
 def _severity_rank(severity: str) -> int:
     return {"critical": 4, "high": 3, "medium": 2, "low": 1}.get(severity, 0)
+
+
+def _normalize_person_label(label: str) -> str:
+    normalized = " ".join(label.strip().split())
+    if not normalized:
+        return "Me"
+    return normalized[:40]

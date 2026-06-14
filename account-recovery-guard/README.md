@@ -268,7 +268,9 @@ account-recovery-guard-gui
 
 The GUI opens to a guided first-run flow:
 
+- Label who the scan is for, such as `Me` or `spouse`, without creating a stored profile.
 - Connect Gmail, Outlook, or Other Email.
+- See only the provider setup fields that apply to the selected provider.
 - Review scan consent and provider setup before scanning starts.
 - Review recommended accounts found by the scan.
 - Rotate passwords with masked choices and sync vaults.

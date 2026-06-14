@@ -55,7 +55,9 @@ def main() -> int:
         build_provider_or_error,
         controlled_setup_detail_for_log,
         describe_provider_setup,
+        provider_setup_note,
         scan_progress_stages,
+        visible_setup_fields,
     )
     from .gui_state import AccountReview, GuiAppState, MailProviderChoice, ScanSummary
     from .gui_workers import ScanWorker
@@ -143,6 +145,7 @@ def main() -> int:
 
         def _select_provider(self, provider: MailProviderChoice) -> None:
             self.state = self.state.with_mail_provider(provider)
+            self._update_provider_setup_visibility()
             self.stack.setCurrentIndex(1)
 
         def _scan_consent_page(self) -> QScrollArea:
@@ -167,6 +170,8 @@ def main() -> int:
             form = QGridLayout()
             form.setHorizontalSpacing(14)
             form.setVerticalSpacing(10)
+            self.setup_person_label = QLineEdit(self.state.protected_person_label)
+            self.setup_person_label.setPlaceholderText("Me, spouse, parent")
             self.setup_username = QLineEdit("")
             self.setup_username.setPlaceholderText("you@example.com")
             self.setup_days_back = QSpinBox()
@@ -177,6 +182,8 @@ def main() -> int:
             self.setup_gmail_app_password.setPlaceholderText("16-character Google app password")
             self.setup_gmail_full_mailbox = QCheckBox("Scan full Gmail mailbox")
             self.setup_gmail_full_mailbox.setChecked(True)
+            self.setup_gmail_advanced_oauth = QCheckBox("Use advanced Gmail OAuth instead")
+            self.setup_gmail_advanced_oauth.setChecked(False)
             self.setup_gmail_client_secret_file = QLineEdit("")
             self.setup_gmail_client_secret_file.setPlaceholderText("Advanced OAuth JSON path, only if app password is blocked")
             self.setup_graph_tenant_id = QLineEdit("common")
@@ -188,26 +195,28 @@ def main() -> int:
             self.setup_imap_secret_name.setPlaceholderText("Saved password secret name")
 
             fields = (
-                ("Mailbox username", self.setup_username),
-                ("Days to scan", self.setup_days_back),
-                ("Gmail app password", self.setup_gmail_app_password),
-                ("Gmail scan scope", self.setup_gmail_full_mailbox),
-                ("Advanced Gmail OAuth file", self.setup_gmail_client_secret_file),
-                ("Outlook tenant", self.setup_graph_tenant_id),
-                ("Outlook client ID", self.setup_graph_client_id),
-                ("IMAP host", self.setup_imap_host),
-                ("Saved IMAP secret name", self.setup_imap_secret_name),
+                ("person_label", "Who this scan is for", self.setup_person_label),
+                ("username", "Mailbox username", self.setup_username),
+                ("days_back", "Days to scan", self.setup_days_back),
+                ("gmail_app_password", "Gmail app password", self.setup_gmail_app_password),
+                ("gmail_full_mailbox", "Gmail scan scope", self.setup_gmail_full_mailbox),
+                ("gmail_advanced_oauth", "Gmail advanced setup", self.setup_gmail_advanced_oauth),
+                ("gmail_client_secret_file", "Advanced Gmail OAuth file", self.setup_gmail_client_secret_file),
+                ("graph_tenant_id", "Outlook tenant", self.setup_graph_tenant_id),
+                ("graph_client_id", "Outlook client ID", self.setup_graph_client_id),
+                ("imap_host", "IMAP host", self.setup_imap_host),
+                ("imap_secret_name", "Saved IMAP secret name", self.setup_imap_secret_name),
             )
-            for row, (label, widget) in enumerate(fields):
-                form.addWidget(QLabel(label), row, 0)
+            self.setup_field_rows = {}
+            for row, (field_key, label, widget) in enumerate(fields):
+                label_widget = QLabel(label)
+                form.addWidget(label_widget, row, 0)
                 form.addWidget(widget, row, 1)
+                self.setup_field_rows[field_key] = (label_widget, widget)
             setup.body.addLayout(form)
-            setup.body.addWidget(
-                self._body_label(
-                    "For Gmail, paste a Google app password, not your normal Gmail password. It is saved to the OS credential store and the field is cleared after setup. Work or school Gmail may require OAuth instead.",
-                    "listText",
-                )
-            )
+            self.setup_provider_note = self._body_label("", "listText")
+            setup.body.addWidget(self.setup_provider_note)
+            self.setup_gmail_advanced_oauth.stateChanged.connect(lambda: self._update_provider_setup_visibility())
             layout.addWidget(setup)
 
             button_row = QHBoxLayout()
@@ -224,6 +233,7 @@ def main() -> int:
             button_row.addWidget(start)
             layout.addLayout(button_row)
             layout.addStretch(1)
+            self._update_provider_setup_visibility()
             return page
 
         def _start_scan_from_consent(self) -> None:
@@ -232,13 +242,18 @@ def main() -> int:
             if self.state.mail_provider is None:
                 self._show_user_error("Choose a mail provider before starting the scan.", SETUP_DETAIL_MISSING_PROVIDER)
                 return
+            self.state = self.state.with_protected_person(self.setup_person_label.text())
             settings = MailProviderSettings(
                 provider=self.state.mail_provider,
                 username=self.setup_username.text(),
                 days_back=self.setup_days_back.value(),
                 gmail_app_password=self.setup_gmail_app_password.text(),
                 gmail_full_mailbox=self.setup_gmail_full_mailbox.isChecked(),
-                gmail_client_secret_file=self.setup_gmail_client_secret_file.text(),
+                gmail_client_secret_file=(
+                    self.setup_gmail_client_secret_file.text()
+                    if self.setup_gmail_advanced_oauth.isChecked()
+                    else ""
+                ),
                 graph_tenant_id=self.setup_graph_tenant_id.text(),
                 graph_client_id=self.setup_graph_client_id.text(),
                 imap_host=self.setup_imap_host.text(),
@@ -278,6 +293,29 @@ def main() -> int:
             worker.failed.connect(thread.quit)
             thread.finished.connect(thread.deleteLater)
             thread.start()
+
+        def _update_provider_setup_visibility(self) -> None:
+            if not hasattr(self, "setup_field_rows"):
+                return
+            visible = visible_setup_fields(
+                self.state.mail_provider,
+                self.setup_gmail_advanced_oauth.isChecked()
+                if hasattr(self, "setup_gmail_advanced_oauth")
+                else False,
+            )
+            for field_key, (label, widget) in self.setup_field_rows.items():
+                is_visible = field_key in visible
+                label.setVisible(is_visible)
+                widget.setVisible(is_visible)
+            if hasattr(self, "setup_provider_note"):
+                self.setup_provider_note.setText(
+                    provider_setup_note(
+                        self.state.mail_provider,
+                        self.setup_gmail_advanced_oauth.isChecked()
+                        if hasattr(self, "setup_gmail_advanced_oauth")
+                        else False,
+                    )
+                )
 
         def _show_user_error(self, message: str, technical_details: str) -> None:
             if hasattr(self, "setup_error_label"):
@@ -348,7 +386,13 @@ def main() -> int:
                 self._render_empty_results()
                 return
             self._clear_layout(self.results_layout)
-            self.results_layout.addWidget(StepHeader(summary.headline, summary.attention_text, "Step 3 of 3"))
+            self.results_layout.addWidget(
+                StepHeader(
+                    self.state.protected_person_prefix + summary.headline,
+                    summary.attention_text,
+                    "Step 3 of 3",
+                )
+            )
             if summary.recommended is None:
                 self._render_empty_results(summary)
                 return
@@ -383,7 +427,11 @@ def main() -> int:
         def _render_empty_results(self, summary: ScanSummary | None = None) -> None:
             if hasattr(self, "results_layout"):
                 self._clear_layout(self.results_layout)
-                title = summary.headline if summary else "Review accounts needing attention"
+                title = (
+                    self.state.protected_person_prefix + summary.headline
+                    if summary
+                    else "Review accounts needing attention"
+                )
                 subtitle = summary.attention_text if summary else "Results will appear here after the scanner finishes."
                 self.results_layout.addWidget(StepHeader(title, subtitle, "Step 3 of 3"))
                 empty = Card("No accounts need attention" if summary else "No results yet")
@@ -680,7 +728,9 @@ def main() -> int:
                 if self.state.vault_status.requires_csv_cleanup
                 else ""
             )
-            self.dashboard_summary_label.setText(f"{summary.headline}. {summary.attention_text} {vault_text}{cleanup_text}")
+            self.dashboard_summary_label.setText(
+                f"{self.state.protected_person_prefix}{summary.headline}. {summary.attention_text} {vault_text}{cleanup_text}"
+            )
             if hasattr(self, "dashboard_vault_status_label"):
                 self.dashboard_vault_status_label.setText(f"Bitwarden status: {vault_text}")
                 self.dashboard_vault_cleanup_label.setText(

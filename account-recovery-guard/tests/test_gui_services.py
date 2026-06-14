@@ -12,7 +12,9 @@ from account_recovery_guard.gui_services import (
     build_provider_or_error,
     controlled_setup_detail_for_log,
     describe_provider_setup,
+    provider_setup_note,
     scan_progress_stages,
+    visible_setup_fields,
 )
 from account_recovery_guard.gui_state import MailProviderChoice
 from account_recovery_guard.models import DiscoveredAccount, PasswordCandidate
@@ -59,6 +61,46 @@ def test_describe_provider_setup_marks_other_email_advanced():
     assert setup.title == "Other email"
     assert setup.advanced is True
     assert "IMAP" in setup.technical_details
+
+
+def test_visible_setup_fields_keep_gmail_simple_by_default():
+    fields = visible_setup_fields(MailProviderChoice.GMAIL)
+
+    assert "person_label" in fields
+    assert "username" in fields
+    assert "gmail_app_password" in fields
+    assert "gmail_full_mailbox" in fields
+    assert "gmail_client_secret_file" not in fields
+    assert "graph_client_id" not in fields
+    assert "imap_host" not in fields
+
+
+def test_visible_setup_fields_show_gmail_oauth_only_when_enabled():
+    fields = visible_setup_fields(MailProviderChoice.GMAIL, gmail_advanced_oauth=True)
+
+    assert "gmail_client_secret_file" in fields
+    assert "gmail_app_password" in fields
+
+
+def test_visible_setup_fields_are_provider_specific():
+    outlook = visible_setup_fields(MailProviderChoice.OUTLOOK)
+    other = visible_setup_fields(MailProviderChoice.OTHER_EMAIL)
+
+    assert "person_label" in outlook
+    assert "person_label" in other
+    assert "graph_client_id" in outlook
+    assert "gmail_app_password" not in outlook
+    assert "imap_host" in other
+    assert "graph_client_id" not in other
+
+
+def test_provider_setup_note_explains_safe_secret_handling():
+    gmail_note = provider_setup_note(MailProviderChoice.GMAIL)
+    other_note = provider_setup_note(MailProviderChoice.OTHER_EMAIL)
+
+    assert "normal Google password" in gmail_note
+    assert "OS credential store" in gmail_note
+    assert "OS credential store" in other_note
 
 
 def test_scan_progress_stages_are_plain_language():

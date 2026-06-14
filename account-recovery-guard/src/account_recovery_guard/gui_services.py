@@ -30,6 +30,17 @@ SETUP_DETAIL_CREDENTIAL_STORE_UNAVAILABLE = "credential_store_unavailable"
 SETUP_DETAIL_MISSING_PROVIDER = "missing_provider"
 SETUP_DETAIL_MISSING_PROVIDER_INSTANCE = "missing_provider_instance"
 SETUP_DETAIL_SCAN_FAILED = "scan_failed"
+FIELD_USERNAME = "username"
+FIELD_PERSON_LABEL = "person_label"
+FIELD_DAYS_BACK = "days_back"
+FIELD_GMAIL_APP_PASSWORD = "gmail_app_password"
+FIELD_GMAIL_FULL_MAILBOX = "gmail_full_mailbox"
+FIELD_GMAIL_ADVANCED_OAUTH = "gmail_advanced_oauth"
+FIELD_GMAIL_CLIENT_SECRET_FILE = "gmail_client_secret_file"
+FIELD_GRAPH_TENANT_ID = "graph_tenant_id"
+FIELD_GRAPH_CLIENT_ID = "graph_client_id"
+FIELD_IMAP_HOST = "imap_host"
+FIELD_IMAP_SECRET_NAME = "imap_secret_name"
 CONTROLLED_SETUP_DETAIL_CODES = frozenset(
     {
         SETUP_DETAIL_MISSING_CLIENT_SECRET_FILE,
@@ -107,6 +118,66 @@ def describe_provider_setup(provider: MailProviderChoice) -> ProviderSetupCopy:
         advanced=True,
         technical_details="Advanced setup uses IMAP host, username, and an app password stored in the OS credential store.",
     )
+
+
+def visible_setup_fields(provider: MailProviderChoice | None, gmail_advanced_oauth: bool = False) -> frozenset[str]:
+    if provider == MailProviderChoice.GMAIL:
+        fields = {
+            FIELD_PERSON_LABEL,
+            FIELD_USERNAME,
+            FIELD_DAYS_BACK,
+            FIELD_GMAIL_APP_PASSWORD,
+            FIELD_GMAIL_FULL_MAILBOX,
+            FIELD_GMAIL_ADVANCED_OAUTH,
+        }
+        if gmail_advanced_oauth:
+            fields.add(FIELD_GMAIL_CLIENT_SECRET_FILE)
+        return frozenset(fields)
+    if provider == MailProviderChoice.OUTLOOK:
+        return frozenset(
+            {
+                FIELD_USERNAME,
+                FIELD_PERSON_LABEL,
+                FIELD_DAYS_BACK,
+                FIELD_GRAPH_TENANT_ID,
+                FIELD_GRAPH_CLIENT_ID,
+            }
+        )
+    if provider == MailProviderChoice.OTHER_EMAIL:
+        return frozenset(
+            {
+                FIELD_USERNAME,
+                FIELD_PERSON_LABEL,
+                FIELD_DAYS_BACK,
+                FIELD_IMAP_HOST,
+                FIELD_IMAP_SECRET_NAME,
+            }
+        )
+    return frozenset({FIELD_PERSON_LABEL, FIELD_USERNAME, FIELD_DAYS_BACK})
+
+
+def provider_setup_note(provider: MailProviderChoice | None, gmail_advanced_oauth: bool = False) -> str:
+    if provider == MailProviderChoice.GMAIL:
+        if gmail_advanced_oauth:
+            return (
+                "Advanced Gmail OAuth is for accounts where app passwords are blocked. Use a Google OAuth "
+                "client JSON from your own Google Cloud project."
+            )
+        return (
+            "For personal Gmail, paste a Google app password, not your normal Google password. It is saved "
+            "to the OS credential store and this field is cleared after setup."
+        )
+    if provider == MailProviderChoice.OUTLOOK:
+        return (
+            "Outlook scanning uses Microsoft device-code sign-in and a free Microsoft application client ID. "
+            "Normal mailbox passwords are not stored here."
+        )
+    if provider == MailProviderChoice.OTHER_EMAIL:
+        return (
+            "Use IMAP only for providers that support app passwords or mail tokens. Store that secret in the "
+            "OS credential store first, then enter the secret name here."
+        )
+    return "Choose Gmail, Outlook, or Other Email to see only the setup fields needed for that provider."
 
 
 def build_provider_or_error(settings: MailProviderSettings) -> tuple[MailProvider | None, UserFacingSetupError | None]:
