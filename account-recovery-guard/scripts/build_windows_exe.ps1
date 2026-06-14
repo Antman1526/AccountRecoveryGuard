@@ -24,9 +24,14 @@ $PyinstallerArgs = @(
 
 if ($env:WINDOWS_SIGNTOOL_PATH -and $env:WINDOWS_CERT_SHA1) {
   & $env:WINDOWS_SIGNTOOL_PATH sign /sha1 $env:WINDOWS_CERT_SHA1 /fd SHA256 /tr http://timestamp.digicert.com /td SHA256 dist\AccountRecoveryGuard.exe
+  $SigningStatus = "signed"
+} else {
+  $SigningStatus = "unsigned-development"
 }
 
 & $PythonExe scripts\checksums.py dist\AccountRecoveryGuard.exe | Out-File -Encoding ascii dist\AccountRecoveryGuard.exe.sha256
+& $PythonExe scripts\artifact_integrity.py verify dist\AccountRecoveryGuard.exe dist\AccountRecoveryGuard.exe.sha256
+& $PythonExe scripts\artifact_integrity.py manifest dist\AccountRecoveryGuard.exe dist\AccountRecoveryGuard.exe.sha256 --platform windows --signing-status $SigningStatus --output dist\AccountRecoveryGuard-Windows.manifest.json
 @"
 Account Recovery Guard for Windows
 

@@ -140,6 +140,7 @@ Use installers only from the official repository and verify checksums before run
 - Windows: prefer a signed `.exe`; unsigned PyInstaller executables are development artifacts and may be quarantined by antivirus tools.
 - Keep Gatekeeper, XProtect, Microsoft Defender, and trusted endpoint protection enabled.
 - Do not bypass malware warnings unless you have verified the artifact source, checksum, and signing status.
+- Release builds include a JSON manifest with the artifact name, size, SHA-256, git commit, GitHub run ID, platform, and signing status.
 - See the root `SECURITY.md` for the release checklist and reporting process.
 
 ## Install: macOS
@@ -373,6 +374,7 @@ Signing hooks:
 - Windows: set `WINDOWS_SIGNTOOL_PATH` and `WINDOWS_CERT_SHA1` before `scripts/build_windows_exe.ps1`.
 - Without signing variables, builds are development artifacts and may trigger OS warnings.
 - Both packaging scripts emit SHA256 checksum files.
+- Both packaging scripts verify their own checksum files and emit JSON artifact manifests for release traceability.
 
 Create a GitHub Release:
 

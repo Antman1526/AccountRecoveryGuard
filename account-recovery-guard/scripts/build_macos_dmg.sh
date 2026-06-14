@@ -24,6 +24,9 @@ PYINSTALLER_ARGS=(
 if [[ -n "${MACOS_CODESIGN_IDENTITY:-}" ]]; then
   PYINSTALLER_ARGS+=(--codesign-identity "$MACOS_CODESIGN_IDENTITY")
   PYINSTALLER_ARGS+=(--osx-entitlements-file packaging/macos-entitlements.plist)
+  SIGNING_STATUS="signed"
+else
+  SIGNING_STATUS="unsigned-development"
 fi
 
 "$PYTHON_BIN" -m PyInstaller "${PYINSTALLER_ARGS[@]}" packaging/account_recovery_guard_entry.py
@@ -54,4 +57,11 @@ hdiutil create \
   "$DMG_PATH"
 
 "$PYTHON_BIN" scripts/checksums.py "$DMG_PATH" > "dist/AccountRecoveryGuard-macOS.dmg.sha256"
+"$PYTHON_BIN" scripts/artifact_integrity.py verify "$DMG_PATH" "dist/AccountRecoveryGuard-macOS.dmg.sha256"
+"$PYTHON_BIN" scripts/artifact_integrity.py manifest \
+  "$DMG_PATH" \
+  "dist/AccountRecoveryGuard-macOS.dmg.sha256" \
+  --platform macos \
+  --signing-status "$SIGNING_STATUS" \
+  --output "dist/AccountRecoveryGuard-macOS.manifest.json"
 echo "Created $DMG_PATH"

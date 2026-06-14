@@ -1,5 +1,8 @@
 name: Build Account Recovery Guard
 
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+
 on:
   workflow_call:
   workflow_dispatch:
@@ -58,6 +61,7 @@ jobs:
           path: |
             account-recovery-guard/dist/AccountRecoveryGuard-macOS.dmg
             account-recovery-guard/dist/AccountRecoveryGuard-macOS.dmg.sha256
+            account-recovery-guard/dist/AccountRecoveryGuard-macOS.manifest.json
 
   windows-exe:
     runs-on: windows-latest
@@ -78,4 +82,5 @@ jobs:
           path: |
             account-recovery-guard/dist/AccountRecoveryGuard.exe
             account-recovery-guard/dist/AccountRecoveryGuard.exe.sha256
+            account-recovery-guard/dist/AccountRecoveryGuard-Windows.manifest.json
             account-recovery-guard/dist/README-Windows.txt

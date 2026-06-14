@@ -14,6 +14,7 @@ Use these controls before running release artifacts:
 
 - Download installers only from `https://github.com/Antman1526/AccountRecoveryGuard`.
 - Verify the provided SHA-256 checksum before opening an artifact.
+- Inspect the JSON manifest next to each artifact for filename, size, SHA-256, git commit, run ID, platform, and signing status.
 - Prefer signed and notarized macOS builds and signed Windows builds for distribution.
 - Keep Microsoft Defender, Gatekeeper, XProtect, and any trusted endpoint protection enabled.
 - Treat unsigned PyInstaller `.exe` files as development artifacts; antivirus products may quarantine or delete them because unsigned bundled executables are commonly abused.
@@ -28,6 +29,7 @@ Use these controls before running release artifacts:
 - Password reset automation remains manual-safe and does not bypass MFA, CAPTCHA, passkeys, or device approval.
 - NordPass CSV import files are treated as sensitive plaintext files and should be deleted after import.
 - GitHub Actions runs tests, dependency vulnerability auditing, and artifact checksum generation.
+- Build scripts verify generated checksums and emit release artifact manifests.
 
 ## Release Checklist
 
@@ -37,10 +39,11 @@ Before publishing or sharing installers:
 2. Run dependency auditing with `pip-audit`.
 3. Build from GitHub Actions or a clean local checkout.
 4. Verify generated SHA-256 checksums.
-5. Sign and notarize the macOS `.dmg` when a Developer ID certificate is available.
-6. Sign the Windows `.exe` when a code-signing certificate is available.
-7. Scan artifacts with the platform's built-in protection before distribution.
-8. Publish checksums and release notes with every release.
+5. Confirm the generated JSON manifest points to the expected git commit and run ID.
+6. Sign and notarize the macOS `.dmg` when a Developer ID certificate is available.
+7. Sign the Windows `.exe` when a code-signing certificate is available.
+8. Scan artifacts with the platform's built-in protection before distribution.
+9. Publish checksums, manifests, and release notes with every release.
 
 ## Reporting Security Issues
 
