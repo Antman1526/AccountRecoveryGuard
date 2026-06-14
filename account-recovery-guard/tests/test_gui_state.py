@@ -183,6 +183,49 @@ def test_account_reviews_use_recorded_mailbox_username():
     assert reviews[0].username != "you@example.com"
 
 
+def test_account_review_trusts_https_reset_link_on_expected_domain():
+    account = AccountReview(
+        service_name="Dropbox",
+        username="me@example.com",
+        url="https://dropbox.com",
+        reset_link="https://dropbox.com/reset",
+    )
+
+    assert account.reset_link_is_trusted is True
+    assert "matches the expected service domain" in account.reset_link_safety_message
+
+
+def test_account_review_trusts_https_reset_link_on_expected_subdomain():
+    account = AccountReview(
+        service_name="Dropbox",
+        username="me@example.com",
+        url="https://dropbox.com",
+        reset_link="https://accounts.dropbox.com/reset",
+    )
+
+    assert account.reset_link_is_trusted is True
+
+
+def test_account_review_blocks_http_or_mismatched_reset_link():
+    http_link = AccountReview(
+        service_name="Dropbox",
+        username="me@example.com",
+        url="https://dropbox.com",
+        reset_link="http://dropbox.com/reset",
+    )
+    phishing_link = AccountReview(
+        service_name="Dropbox",
+        username="me@example.com",
+        url="https://dropbox.com",
+        reset_link="https://dropbox.example.com/reset",
+    )
+
+    assert http_link.reset_link_is_trusted is False
+    assert phishing_link.reset_link_is_trusted is False
+    assert "official website" in phishing_link.reset_link_safety_message
+    assert "dropbox.example.com" not in phishing_link.reset_link_safety_message
+
+
 def test_scan_summary_recommends_highest_risk_finding():
     finding = CompromisedAccountFinding(
         service_name="Dropbox",

@@ -705,18 +705,30 @@ def main() -> int:
                 "listText",
             )
             actions.body.addWidget(self.rotation_status_label)
+            actions.body.addWidget(
+                self._body_label(
+                    account.reset_link_safety_message,
+                    "listText" if account.reset_link_is_trusted else "warningText",
+                )
+            )
             button_row = QHBoxLayout()
             copy = QPushButton("Copy selected password")
             copy.setObjectName("primaryButton")
             copy.setCursor(Qt.CursorShape.PointingHandCursor)
             copy.clicked.connect(self._copy_selected_rotation_password)
             button_row.addWidget(copy)
-            if account.reset_link:
-                reset = QPushButton("Open reset link")
+            if account.reset_link and account.reset_link_is_trusted:
+                reset = QPushButton("Open verified reset link")
                 reset.setObjectName("secondaryButton")
                 reset.setCursor(Qt.CursorShape.PointingHandCursor)
                 reset.clicked.connect(lambda checked=False, link=account.reset_link: webbrowser.open(link))
                 button_row.addWidget(reset)
+            elif account.url:
+                official = QPushButton("Open official site")
+                official.setObjectName("secondaryButton")
+                official.setCursor(Qt.CursorShape.PointingHandCursor)
+                official.clicked.connect(lambda checked=False, link=account.url: webbrowser.open(link))
+                button_row.addWidget(official)
             confirmed = QCheckBox("I changed this password on the website")
             sync_vaults = QPushButton("Prepare vault sync")
             sync_vaults.setObjectName("secondaryButton")

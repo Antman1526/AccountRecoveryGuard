@@ -279,6 +279,7 @@ The GUI opens to a guided first-run flow:
 - Review a clear next safest action plus the accounts needing attention found by the scan.
 - Check one reused password directly from the Results or Dashboard screens with the free HIBP k-anonymous range check; the field is cleared after checking.
 - Use the password-exposure result to guide rotation without overstating certainty: if the checked password was found, rotate only accounts where you reused it, one at a time.
+- Open reset links only when they use HTTPS and match the expected service domain; otherwise use the official site or app manually.
 - Rotate passwords with masked choices, then prepare vault sync only after confirming the password was changed on the real service.
 - Stage the NordPass import CSV from the guided rotation flow, import it immediately, verify, and delete it after use with the in-app cleanup button.
 

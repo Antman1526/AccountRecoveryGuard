@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field, replace
 from enum import StrEnum
+from urllib.parse import urlparse
 
 from .models import CompromisedAccountFinding, PasswordCandidate, RotationChoiceSummary
 from .rotation import summarize_rotation_choices
@@ -54,6 +55,28 @@ class AccountReview:
     @classmethod
     def from_finding_stub(cls, service_name: str, username: str) -> "AccountReview":
         return cls(service_name=service_name, username=username)
+
+    @property
+    def reset_link_is_trusted(self) -> bool:
+        if not self.reset_link or not self.url:
+            return False
+        reset = urlparse(self.reset_link)
+        expected = urlparse(self.url)
+        if reset.scheme != "https":
+            return False
+        reset_host = _normalize_host(reset.hostname)
+        expected_host = _normalize_host(expected.hostname)
+        if not reset_host or not expected_host:
+            return False
+        return reset_host == expected_host or reset_host.endswith("." + expected_host)
+
+    @property
+    def reset_link_safety_message(self) -> str:
+        if not self.reset_link:
+            return "Use the official website or app to reset this password."
+        if self.reset_link_is_trusted:
+            return "This reset link uses HTTPS and matches the expected service domain. Check the page before entering anything."
+        return "This email reset link does not match the expected service domain. Use the official website or app instead."
 
 
 @dataclass(frozen=True)
@@ -333,6 +356,15 @@ def _normalize_person_label(label: str) -> str:
 
 def _normalize_mailbox_username(username: str) -> str:
     return " ".join(username.strip().split())[:254]
+
+
+def _normalize_host(host: str | None) -> str:
+    if not host:
+        return ""
+    normalized = host.strip().lower().rstrip(".")
+    if normalized.startswith("www."):
+        return normalized[4:]
+    return normalized
 
 
 def _password_exposure_checklist_detail(count: int | None) -> str:
