@@ -129,7 +129,7 @@ MFA:
 - Verified reset links opened from the GUI or CLI use a visible Playwright recovery browser for manual completion, and that recovery browser session blocks common installer, archive, and script downloads.
 - You remain responsible for confirming the domain before entering a generated password.
 - The `rotate` command requires you to type `ROTATED` before vault writes so the vault does not get ahead of the real account state.
-- `rotate` masks the five generated choices by default and reveals only the selected password. `--copy-selected` copies it to the clipboard and schedules clipboard clearing after 60 seconds when the platform supports it.
+- `rotate` masks the five generated choices by default and reveals only the selected password. `--copy-selected` copies it to the clipboard and clears it after 60 seconds when the platform supports it, but only if the clipboard still contains that copied password.
 
 Logging:
 
