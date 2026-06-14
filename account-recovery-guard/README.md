@@ -99,7 +99,7 @@ NordPass:
 - Stages a CSV import file formatted for NordPass import.
 - You import it manually in NordPass, then export from NordPass and run `verify-sync`.
 - The CSV necessarily contains plaintext passwords because NordPass import requires that form. It is written with restrictive permissions where the OS allows it and must be deleted after import.
-- `csv-status` warns about stale plaintext NordPass CSV files and can delete them after import.
+- `csv-status` warns about stale plaintext NordPass CSV files, can delete them after import, and reports deletion failures instead of clearing the warning silently.
 - `vault-dashboard` compares exported Bitwarden/NordPass CSVs and reports `in_sync`, `drift`, `bitwarden_only`, and `nordpass_only` rows.
 
 ## Passkeys and Device Storage

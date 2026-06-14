@@ -1192,12 +1192,20 @@ def main() -> int:
                 if hasattr(self, "rotation_status_label"):
                     self.rotation_status_label.setText("No staged NordPass CSV cleanup is pending.")
                 return
-            deleted = delete_file(Path(csv_path))
-            self.state = self.state.with_csv_cleanup_complete()
+            path = Path(csv_path)
+            existed_before_delete = path.exists()
+            deleted = delete_file(path)
+            cleanup_complete = deleted or not existed_before_delete
+            if cleanup_complete:
+                self.state = self.state.with_csv_cleanup_complete()
             message = (
                 "Staged NordPass CSV deleted."
                 if deleted
-                else "No staged NordPass CSV was found. Cleanup state has been cleared."
+                else (
+                    "No staged NordPass CSV was found. Cleanup state has been cleared."
+                    if cleanup_complete
+                    else f"Delete failed. The plaintext CSV may still exist: {csv_path}"
+                )
             )
             if hasattr(self, "rotation_layout"):
                 self._render_rotation_panel()
@@ -1207,7 +1215,7 @@ def main() -> int:
             if hasattr(self, "dashboard_vault_cleanup_label"):
                 self.dashboard_vault_cleanup_label.setText(message)
             if hasattr(self, "dashboard_delete_csv_button"):
-                self.dashboard_delete_csv_button.setVisible(False)
+                self.dashboard_delete_csv_button.setVisible(not cleanup_complete)
 
         def _show_advanced_tools(self) -> None:
             self._refresh_dashboard()
@@ -1906,14 +1914,20 @@ def main() -> int:
             self._active_password_exposure_button = None
 
         def _delete_known_staged_csv(self, path: Path) -> None:
+            existed_before_delete = path.exists()
             deleted = delete_file(path)
+            cleanup_complete = deleted or not existed_before_delete
             if hasattr(self, "security_csv_warning_label"):
                 self.security_csv_warning_label.setText(
                     "Staged NordPass CSV deleted."
                     if deleted
-                    else "No staged NordPass CSV was found in the app data folder."
+                    else (
+                        "No staged NordPass CSV was found in the app data folder."
+                        if cleanup_complete
+                        else f"Delete failed. The plaintext CSV may still exist: {path}"
+                    )
                 )
-                self.security_csv_warning_label.setObjectName("listText")
+                self.security_csv_warning_label.setObjectName("listText" if cleanup_complete else "warningText")
 
     app = QApplication(sys.argv)
     app.setStyleSheet(calm_shield_stylesheet())

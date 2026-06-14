@@ -48,5 +48,10 @@ def secure_delete_file(path: Path) -> bool:
             handle.flush()
     except OSError:
         pass
-    path.unlink()
+    try:
+        path.unlink()
+    except FileNotFoundError:
+        return True
+    except OSError:
+        return False
     return True

@@ -221,3 +221,16 @@ def test_csv_status_can_delete_default_staged_nordpass_path(tmp_path, monkeypatc
 
     assert capsys.readouterr().out.strip() == "Deleted."
     assert not staged.exists()
+
+
+def test_csv_status_reports_delete_failure_for_existing_plaintext_csv(tmp_path, monkeypatch, capsys) -> None:
+    staged = tmp_path / "nordpass-import.csv"
+    staged.write_text("plaintext", encoding="utf-8")
+    monkeypatch.setattr(cli, "default_nordpass_import_csv_path", lambda: staged)
+    monkeypatch.setattr(cli, "delete_file", lambda path: False)
+
+    _csv_status(argparse.Namespace(path=None, ttl_seconds=300, delete=True))
+
+    output = capsys.readouterr().out
+    assert "Delete failed" in output
+    assert str(staged) in output

@@ -596,8 +596,14 @@ def _vault_live_test(args: argparse.Namespace) -> None:
 def _csv_status(args: argparse.Namespace) -> None:
     path = Path(args.path) if args.path else default_nordpass_import_csv_path()
     if args.delete:
+        existed_before_delete = path.exists()
         deleted = delete_file(path)
-        print("Deleted." if deleted else "File not found.")
+        if deleted:
+            print("Deleted.")
+        elif existed_before_delete:
+            print(f"Delete failed. The plaintext CSV may still exist: {path}")
+        else:
+            print("File not found.")
         return
     message = plaintext_file_warning(path, args.ttl_seconds) or "CSV is not stale or does not exist."
     print(f"{message} Location: {path}")
