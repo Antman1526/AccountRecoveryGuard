@@ -10,7 +10,9 @@ from .gui_workflow import (
     build_protection_plan,
     build_command_preview,
     consumer_readiness_rows,
+    password_exposure_blocked_message,
     password_exposure_prompt_lines,
+    password_exposure_ready,
     recovery_stages,
     rotation_copy_confirmation_text,
     safe_recovery_scope_lines,
@@ -1193,6 +1195,12 @@ def main() -> int:
             check_button = QPushButton("Check password exposure")
             check_button.setObjectName("primaryButton")
             check_button.setCursor(Qt.CursorShape.PointingHandCursor)
+            check_button.setEnabled(False)
+            update_check_button = lambda: check_button.setEnabled(
+                password_exposure_ready(password_input.text(), old_or_reused.isChecked())
+            )
+            password_input.textChanged.connect(lambda: update_check_button())
+            old_or_reused.stateChanged.connect(lambda: update_check_button())
             check_button.clicked.connect(
                 lambda checked=False, field=password_input, label=status, button=check_button: self._run_password_exposure_check(
                     field, label, button, old_or_reused
@@ -1677,6 +1685,15 @@ def main() -> int:
             self.password_exposure_button = password_check
             password_check.setObjectName("primaryButton")
             password_check.setCursor(Qt.CursorShape.PointingHandCursor)
+            password_check.setEnabled(False)
+            update_security_password_button = lambda: password_check.setEnabled(
+                password_exposure_ready(
+                    self.password_exposure_input.text(),
+                    self.password_exposure_confirmation.isChecked(),
+                )
+            )
+            self.password_exposure_input.textChanged.connect(lambda: update_security_password_button())
+            self.password_exposure_confirmation.stateChanged.connect(lambda: update_security_password_button())
             password_check.clicked.connect(
                 lambda checked=False: self._run_password_exposure_check(
                     self.password_exposure_input,
@@ -1790,8 +1807,17 @@ def main() -> int:
             if password_input is None:
                 return
             password = password_input.text()
-            password_input.clear()
             confirmed_old_or_reused = bool(confirmation is not None and confirmation.isChecked())
+            if not password_exposure_ready(password, confirmed_old_or_reused):
+                password_input.clear()
+                if confirmation is not None:
+                    confirmation.setChecked(False)
+                if action_button is not None:
+                    action_button.setEnabled(False)
+                if status_label is not None:
+                    status_label.setText(password_exposure_blocked_message(password, confirmed_old_or_reused))
+                return
+            password_input.clear()
             if confirmation is not None:
                 confirmation.setChecked(False)
             self._active_password_exposure_status = status_label
@@ -1822,7 +1848,7 @@ def main() -> int:
             if status_label is not None:
                 status_label.setText(result.user_message)
             if action_button is not None:
-                action_button.setEnabled(True)
+                action_button.setEnabled(False)
             self._refresh_dashboard()
 
         @Slot()

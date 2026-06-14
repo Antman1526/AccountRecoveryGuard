@@ -290,6 +290,7 @@ The GUI opens to a guided first-run flow:
 - Read safe `http`/`https` links from HTML email buttons so security alerts with button-only reset links are not missed.
 - Flag reset/security links whose domain does not match the sender's expected service domain as higher-risk phishing signals.
 - Check one reused password directly from the Results or Dashboard screens with the free HIBP k-anonymous range check; the field is cleared after checking.
+- Keep the password exposure button disabled until a password is entered and the user confirms it is old or reused, not newly generated.
 - Avoid sending the same password check repeatedly in one app session; repeated checks reuse a local keyed fingerprint result instead of contacting HIBP again.
 - Use the password-exposure result to guide rotation without overstating certainty: if the checked password was found, rotate only accounts where you reused it, one at a time.
 - Open reset links only when they use HTTPS and match the expected service domain; otherwise use the official site or app manually.

@@ -1,7 +1,9 @@
 from account_recovery_guard.gui_workflow import build_command_preview
 from account_recovery_guard.gui_workflow import build_protection_plan
 from account_recovery_guard.gui_workflow import consumer_readiness_rows
+from account_recovery_guard.gui_workflow import password_exposure_blocked_message
 from account_recovery_guard.gui_workflow import password_exposure_prompt_lines
+from account_recovery_guard.gui_workflow import password_exposure_ready
 from account_recovery_guard.gui_workflow import (
     recovery_stages,
     rotation_copy_confirmation_text,
@@ -65,6 +67,24 @@ def test_password_exposure_prompt_guides_rotation_without_overreach():
     assert "where you reused that password" in found_text
     assert "all sites" not in found_text
     assert "suspicious mailbox alerts" in clean_text
+
+
+def test_password_exposure_ready_requires_text_and_confirmation():
+    assert password_exposure_ready("", False) is False
+    assert password_exposure_ready("old-password", False) is False
+    assert password_exposure_ready("", True) is False
+    assert password_exposure_ready("old-password", True) is True
+
+
+def test_password_exposure_blocked_message_discourages_generated_password_checks():
+    missing = password_exposure_blocked_message("", False)
+    unconfirmed = password_exposure_blocked_message("new-password", False)
+    ready = password_exposure_blocked_message("old-password", True)
+
+    assert "Enter an old or reused password" in missing
+    assert "Do not check a new generated password" in unconfirmed
+    assert "HIBP k-anonymous" in ready
+    assert "new-password" not in unconfirmed
 
 
 def test_rotation_copy_confirmation_distinguishes_verified_and_manual_paths():

@@ -104,6 +104,18 @@ def password_exposure_prompt_lines(count: int | None = None) -> list[str]:
     return lines + ["If it is not found, still rotate accounts with suspicious mailbox alerts."]
 
 
+def password_exposure_ready(password_text: str, confirmed_old_or_reused: bool) -> bool:
+    return bool(password_text) and confirmed_old_or_reused
+
+
+def password_exposure_blocked_message(password_text: str, confirmed_old_or_reused: bool) -> str:
+    if not password_text:
+        return "Enter an old or reused password to check. The field will be cleared after the check."
+    if not confirmed_old_or_reused:
+        return "Confirm this is an old or reused password before checking. Do not check a new generated password."
+    return "Ready for the free HIBP k-anonymous password check."
+
+
 def rotation_copy_confirmation_text(reset_link_is_trusted: bool) -> str:
     if reset_link_is_trusted:
         return "I am on the verified reset page or the official app."
