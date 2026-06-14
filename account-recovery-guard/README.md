@@ -275,7 +275,7 @@ The GUI opens to a guided first-run flow:
 - See only the provider setup fields that apply to the selected provider.
 - Review scan consent and provider setup before scanning starts.
 - Review a clear next safest action plus the accounts needing attention found by the scan.
-- Check one password directly in the GUI with the free HIBP k-anonymous range check; the field is cleared after checking.
+- Check one reused password directly from the Results or Dashboard screens with the free HIBP k-anonymous range check; the field is cleared after checking.
 - Use the password-exposure result to guide rotation without overstating certainty: if the checked password was found, rotate only accounts where you reused it, one at a time.
 - Rotate passwords with masked choices and sync vaults.
 

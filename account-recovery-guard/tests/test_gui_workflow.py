@@ -1,4 +1,5 @@
 from account_recovery_guard.gui_workflow import build_command_preview
+from account_recovery_guard.gui_workflow import password_exposure_prompt_lines
 from account_recovery_guard.gui_workflow import recovery_stages, suggested_next_actions
 
 
@@ -29,3 +30,24 @@ def test_suggested_next_actions_are_user_friendly_and_safe():
     assert actions[0].startswith("Start with")
     assert any("Bitwarden" in action and "NordPass" in action for action in actions)
     assert all("plaintext password" not in action.lower() for action in actions)
+
+
+def test_password_exposure_prompt_explains_free_safe_boundary():
+    lines = password_exposure_prompt_lines()
+    text = " ".join(lines).lower()
+
+    assert "free hibp" in text
+    assert "k-anonymous" in text
+    assert "never logged" in text
+    assert "whole web" in text
+    assert "dark-web" in text
+    assert "private forums" in text
+
+
+def test_password_exposure_prompt_guides_rotation_without_overreach():
+    found_text = " ".join(password_exposure_prompt_lines(12)).lower()
+    clean_text = " ".join(password_exposure_prompt_lines(0)).lower()
+
+    assert "where you reused that password" in found_text
+    assert "all sites" not in found_text
+    assert "suspicious mailbox alerts" in clean_text

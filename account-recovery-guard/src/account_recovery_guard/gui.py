@@ -6,7 +6,7 @@ from pathlib import Path
 
 from .clipboard import copy_text
 from .exposure import SAFE_EXPOSURE_BOUNDARY
-from .gui_workflow import build_command_preview, recovery_stages, suggested_next_actions
+from .gui_workflow import build_command_preview, password_exposure_prompt_lines, recovery_stages, suggested_next_actions
 from .gui_theme import calm_shield_stylesheet
 from .passkeys import passkey_guidance
 from .paths import user_state_dir
@@ -71,6 +71,8 @@ def main() -> int:
             self._scan_thread = None
             self._password_exposure_worker = None
             self._password_exposure_thread = None
+            self._active_password_exposure_status = None
+            self._active_password_exposure_button = None
             self.setWindowTitle("Account Recovery Guard")
             self.resize(1180, 760)
             self.setMinimumSize(980, 660)
@@ -461,6 +463,8 @@ def main() -> int:
             card.body.addLayout(button_row)
             self.results_layout.addWidget(card)
 
+            self.results_layout.addWidget(self._password_exposure_card("Check a reused password"))
+
             list_card = Card("Accounts needing attention")
             for index, review_account in enumerate(accounts[:8], start=1):
                 row = QFrame()
@@ -519,6 +523,7 @@ def main() -> int:
                 if summary is None:
                     self.results_layout.addStretch(1)
                     return
+                self.results_layout.addWidget(self._password_exposure_card("Check a reused password"))
                 button_row = QHBoxLayout()
                 rotate = QPushButton("Review password guidance")
                 rotate.setObjectName("secondaryButton")
@@ -727,6 +732,8 @@ def main() -> int:
             status.body.addWidget(self.dashboard_summary_label)
             layout.addWidget(status)
 
+            layout.addWidget(self._password_exposure_card("Check a reused password"))
+
             self.dashboard_checklist_card = Card("Protection checklist")
             layout.addWidget(self.dashboard_checklist_card)
 
@@ -846,6 +853,36 @@ def main() -> int:
                 self.dashboard_vault_card.setVisible(False)
             if hasattr(self, "dashboard_advanced_card"):
                 self.dashboard_advanced_card.setVisible(False)
+
+        def _password_exposure_card(self, title: str) -> Card:
+            card = Card(title)
+            for line in password_exposure_prompt_lines(self.state.password_exposure_count):
+                card.body.addWidget(self._body_label(line, "listText"))
+            password_input = QLineEdit("")
+            password_input.setEchoMode(QLineEdit.EchoMode.Password)
+            password_input.setPlaceholderText("Type password, then check")
+            status = self._body_label(
+                self.state.password_exposure_rotation_guidance
+                or "Ready for the free HIBP k-anonymous password check.",
+                "warningText" if self.state.password_exposure_count and self.state.password_exposure_count > 0 else "listText",
+            )
+            form = QGridLayout()
+            form.setHorizontalSpacing(14)
+            form.setVerticalSpacing(10)
+            check_button = QPushButton("Check password exposure")
+            check_button.setObjectName("primaryButton")
+            check_button.setCursor(Qt.CursorShape.PointingHandCursor)
+            check_button.clicked.connect(
+                lambda checked=False, field=password_input, label=status, button=check_button: self._run_password_exposure_check(
+                    field, label, button
+                )
+            )
+            form.addWidget(QLabel("Password"), 0, 0)
+            form.addWidget(password_input, 0, 1)
+            form.addWidget(status, 1, 0, 1, 2)
+            form.addWidget(check_button, 2, 1, alignment=Qt.AlignmentFlag.AlignRight)
+            card.body.addLayout(form)
+            return card
 
         def _sidebar(self) -> QFrame:
             sidebar = QFrame()
@@ -1297,7 +1334,13 @@ def main() -> int:
             self.password_exposure_button = password_check
             password_check.setObjectName("primaryButton")
             password_check.setCursor(Qt.CursorShape.PointingHandCursor)
-            password_check.clicked.connect(self._run_password_exposure_check)
+            password_check.clicked.connect(
+                lambda checked=False: self._run_password_exposure_check(
+                    self.password_exposure_input,
+                    self.password_exposure_status,
+                    self.password_exposure_button,
+                )
+            )
             password_check_layout.addWidget(QLabel("Password"), 0, 0)
             password_check_layout.addWidget(self.password_exposure_input, 0, 1)
             password_check_layout.addWidget(self.password_exposure_status, 1, 0, 1, 2)
@@ -1372,15 +1415,23 @@ def main() -> int:
             layout.addWidget(csv_warning)
             return page
 
-        def _run_password_exposure_check(self) -> None:
-            if not hasattr(self, "password_exposure_input"):
+        def _run_password_exposure_check(self, password_input=None, status_label=None, action_button=None) -> None:
+            if password_input is None:
+                password_input = getattr(self, "password_exposure_input", None)
+            if status_label is None:
+                status_label = getattr(self, "password_exposure_status", None)
+            if action_button is None:
+                action_button = getattr(self, "password_exposure_button", None)
+            if password_input is None:
                 return
-            password = self.password_exposure_input.text()
-            self.password_exposure_input.clear()
-            if hasattr(self, "password_exposure_status"):
-                self.password_exposure_status.setText("Checking with HIBP k-anonymity. Only the hash prefix is sent.")
-            if hasattr(self, "password_exposure_button"):
-                self.password_exposure_button.setEnabled(False)
+            password = password_input.text()
+            password_input.clear()
+            self._active_password_exposure_status = status_label
+            self._active_password_exposure_button = action_button
+            if status_label is not None:
+                status_label.setText("Checking with HIBP k-anonymity. Only the hash prefix is sent.")
+            if action_button is not None:
+                action_button.setEnabled(False)
             thread = QThread(self)
             worker = PasswordExposureWorker(GuiPasswordExposureService(), password)
             self._password_exposure_thread = thread
@@ -1398,16 +1449,20 @@ def main() -> int:
         def _finish_password_exposure_check(self, result) -> None:
             if result.count is not None:
                 self.state = self.state.with_password_exposure_count(result.count)
-            if hasattr(self, "password_exposure_status"):
-                self.password_exposure_status.setText(result.user_message)
-            if hasattr(self, "password_exposure_button"):
-                self.password_exposure_button.setEnabled(True)
+            status_label = self._active_password_exposure_status
+            action_button = self._active_password_exposure_button
+            if status_label is not None:
+                status_label.setText(result.user_message)
+            if action_button is not None:
+                action_button.setEnabled(True)
             self._refresh_dashboard()
 
         @Slot()
         def _clear_password_exposure_worker_refs(self) -> None:
             self._password_exposure_worker = None
             self._password_exposure_thread = None
+            self._active_password_exposure_status = None
+            self._active_password_exposure_button = None
 
     app = QApplication(sys.argv)
     app.setStyleSheet(calm_shield_stylesheet())

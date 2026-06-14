@@ -69,3 +69,16 @@ def suggested_next_actions() -> list[str]:
         "Update Bitwarden first, import the staged NordPass CSV, then verify both vaults match.",
         "Delete staged CSV files after import because NordPass uses a plaintext import/export workflow.",
     ]
+
+
+def password_exposure_prompt_lines(count: int | None = None) -> list[str]:
+    lines = [
+        "Check a password you may have reused. The app uses the free HIBP k-anonymous range check.",
+        "The plaintext password is cleared from the field and is never logged; only a hash prefix is sent.",
+        "This does not search the whole web, dark-web dumps, private forums, or unsafe paste sites.",
+    ]
+    if count is None:
+        return lines
+    if count > 0:
+        return lines + ["If it is found, rotate only the accounts where you reused that password."]
+    return lines + ["If it is not found, still rotate accounts with suspicious mailbox alerts."]
