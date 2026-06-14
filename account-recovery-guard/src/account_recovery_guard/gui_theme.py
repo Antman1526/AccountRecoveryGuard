@@ -81,7 +81,7 @@ def calm_shield_stylesheet() -> str:
         color: #45625d;
         line-height: 1.35;
     }
-    QFrame#accountRow {
+    QFrame#accountRow, QFrame#checklistRow {
         background: #f8fcfb;
         border: 1px solid #dce9e5;
         border-radius: 10px;

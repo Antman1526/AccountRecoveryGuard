@@ -129,6 +129,10 @@ def main() -> int:
                 trust.body.addWidget(self._body_label(line, "listText"))
             layout.addWidget(trust)
 
+            checklist = Card("Protection checklist")
+            self._fill_checklist_card(checklist)
+            layout.addWidget(checklist)
+
             providers = Card("Choose your mail provider")
             for provider in (MailProviderChoice.GMAIL, MailProviderChoice.OUTLOOK, MailProviderChoice.OTHER_EMAIL):
                 setup = describe_provider_setup(provider)
@@ -142,6 +146,27 @@ def main() -> int:
             layout.addWidget(providers)
             layout.addStretch(1)
             return page
+
+        def _fill_checklist_card(self, card: Card) -> None:
+            for item in self.state.first_run_checklist:
+                row = QFrame()
+                row.setObjectName("checklistRow")
+                row_layout = QHBoxLayout(row)
+                row_layout.setContentsMargins(12, 10, 12, 10)
+                row_layout.setSpacing(10)
+                pill = StatusPill(item.status, item.tone)
+                row_layout.addWidget(pill)
+                text_col = QVBoxLayout()
+                title = QLabel(item.title)
+                title.setObjectName("rowTitle")
+                title.setWordWrap(True)
+                detail = QLabel(item.detail)
+                detail.setObjectName("listText")
+                detail.setWordWrap(True)
+                text_col.addWidget(title)
+                text_col.addWidget(detail)
+                row_layout.addLayout(text_col, 1)
+                card.body.addWidget(row)
 
         def _select_provider(self, provider: MailProviderChoice) -> None:
             self.state = self.state.with_mail_provider(provider)
@@ -674,6 +699,9 @@ def main() -> int:
             status.body.addWidget(self.dashboard_summary_label)
             layout.addWidget(status)
 
+            self.dashboard_checklist_card = Card("Protection checklist")
+            layout.addWidget(self.dashboard_checklist_card)
+
             actions = Card("Actions")
             action_row = QHBoxLayout()
             scan = QPushButton("Scan email")
@@ -742,6 +770,12 @@ def main() -> int:
             if not hasattr(self, "dashboard_summary_label"):
                 return
             summary = self.state.scan_summary
+            if hasattr(self, "dashboard_checklist_card"):
+                self._clear_layout(self.dashboard_checklist_card.body)
+                label = QLabel("Protection checklist")
+                label.setObjectName("sectionTitle")
+                self.dashboard_checklist_card.body.addWidget(label)
+                self._fill_checklist_card(self.dashboard_checklist_card)
             if summary is None:
                 self.dashboard_summary_label.setText("Connect email and run a scan to begin.")
                 if hasattr(self, "dashboard_vault_status_label"):

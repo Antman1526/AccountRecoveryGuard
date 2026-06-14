@@ -24,6 +24,14 @@ class GuiStep(StrEnum):
 
 
 @dataclass(frozen=True)
+class ChecklistItem:
+    title: str
+    status: str
+    detail: str
+    tone: str = "safe"
+
+
+@dataclass(frozen=True)
 class AccountReview:
     service_name: str
     username: str
@@ -172,6 +180,47 @@ class GuiAppState:
     @property
     def protected_person_prefix(self) -> str:
         return f"{self.protected_person_label}: "
+
+    @property
+    def first_run_checklist(self) -> tuple[ChecklistItem, ...]:
+        email_ready = self.mail_provider is not None
+        scan_ready = self.scan_summary is not None
+        account_ready = self.selected_account is not None or (
+            self.scan_summary is not None and self.scan_summary.accounts_needing_attention == 0
+        )
+        vault_ready = self.vault_status.verification == "verified"
+        return (
+            ChecklistItem(
+                "Connect email",
+                "done" if email_ready else "next",
+                "Choose Gmail, Outlook, or Other Email so the app can scan authorized mailbox evidence.",
+                "safe" if email_ready else "attention",
+            ),
+            ChecklistItem(
+                "Run local scan",
+                "done" if scan_ready else ("next" if email_ready else "waiting"),
+                "Find security alerts and account signals without crawling unsafe password dumps.",
+                "safe" if scan_ready else ("attention" if email_ready else "safe"),
+            ),
+            ChecklistItem(
+                "Review one account",
+                "done" if account_ready else ("next" if scan_ready else "waiting"),
+                "Start with the highest-risk account and rotate one account at a time.",
+                "safe" if account_ready else ("attention" if scan_ready else "safe"),
+            ),
+            ChecklistItem(
+                "Check password exposure",
+                "available",
+                "Use the free HIBP k-anonymous password check only for a password you provide through the secure store.",
+                "safe",
+            ),
+            ChecklistItem(
+                "Sync vaults",
+                "done" if vault_ready else ("next" if self.rotation_session is not None else "waiting"),
+                "Update Bitwarden, import the staged NordPass CSV, then verify both vaults match.",
+                "safe" if vault_ready else ("attention" if self.rotation_session is not None else "safe"),
+            ),
+        )
 
     @property
     def consent_summary(self) -> str:

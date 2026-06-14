@@ -268,6 +268,7 @@ account-recovery-guard-gui
 
 The GUI opens to a guided first-run flow:
 
+- Follow a protection checklist for email connection, local scan, account review, password exposure check, and vault sync.
 - Label who the scan is for, such as `Me` or `spouse`, without creating a stored profile.
 - Connect Gmail, Outlook, or Other Email.
 - See only the provider setup fields that apply to the selected provider.

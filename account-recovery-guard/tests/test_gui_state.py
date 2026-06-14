@@ -36,6 +36,45 @@ def test_provider_selection_moves_to_consent_without_scanning():
     assert state.scan_started is False
 
 
+def test_first_run_checklist_starts_with_email_as_next_step():
+    state = GuiAppState.new()
+    checklist = {item.title: item for item in state.first_run_checklist}
+
+    assert checklist["Connect email"].status == "next"
+    assert checklist["Run local scan"].status == "waiting"
+    assert checklist["Check password exposure"].status == "available"
+    assert "dark" not in " ".join(item.detail for item in state.first_run_checklist).lower()
+
+
+def test_first_run_checklist_advances_after_provider_and_scan():
+    summary = ScanSummary.from_findings([], discovered_count=0)
+    state = GuiAppState.new().with_mail_provider(MailProviderChoice.GMAIL).with_scan_summary(summary)
+    checklist = {item.title: item for item in state.first_run_checklist}
+
+    assert checklist["Connect email"].status == "done"
+    assert checklist["Run local scan"].status == "done"
+    assert checklist["Review one account"].status == "done"
+    assert checklist["Sync vaults"].status == "waiting"
+
+
+def test_first_run_checklist_points_to_account_review_when_findings_exist():
+    finding = CompromisedAccountFinding(
+        service_name="dropbox",
+        sender_domain="dropbox.com",
+        sender="security@dropbox.com",
+        subject="Suspicious login",
+        timestamp=datetime(2026, 6, 13, tzinfo=UTC),
+        severity="high",
+        reasons=["suspicious activity"],
+    )
+    summary = ScanSummary.from_findings([finding], discovered_count=1)
+    state = GuiAppState.new().with_mail_provider(MailProviderChoice.GMAIL).with_scan_summary(summary)
+    checklist = {item.title: item for item in state.first_run_checklist}
+
+    assert checklist["Review one account"].status == "next"
+    assert "one account at a time" in checklist["Review one account"].detail
+
+
 def test_protected_person_label_is_safe_and_nonempty():
     state = GuiAppState.new().with_protected_person("  spouse   mailbox  ")
 
