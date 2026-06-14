@@ -2,8 +2,8 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field, replace
 from enum import StrEnum
-from urllib.parse import urlparse
 
+from .domain_safety import https_url_matches_domain
 from .models import CompromisedAccountFinding, PasswordCandidate, RotationChoiceSummary
 from .rotation import summarize_rotation_choices
 
@@ -58,17 +58,7 @@ class AccountReview:
 
     @property
     def reset_link_is_trusted(self) -> bool:
-        if not self.reset_link or not self.url:
-            return False
-        reset = urlparse(self.reset_link)
-        expected = urlparse(self.url)
-        if reset.scheme != "https":
-            return False
-        reset_host = _normalize_host(reset.hostname)
-        expected_host = _normalize_host(expected.hostname)
-        if not reset_host or not expected_host:
-            return False
-        return reset_host == expected_host or reset_host.endswith("." + expected_host)
+        return https_url_matches_domain(self.reset_link, self.url)
 
     @property
     def reset_link_safety_message(self) -> str:
@@ -368,15 +358,6 @@ def _normalize_person_label(label: str) -> str:
 
 def _normalize_mailbox_username(username: str) -> str:
     return " ".join(username.strip().split())[:254]
-
-
-def _normalize_host(host: str | None) -> str:
-    if not host:
-        return ""
-    normalized = host.strip().lower().rstrip(".")
-    if normalized.startswith("www."):
-        return normalized[4:]
-    return normalized
 
 
 def _password_exposure_checklist_detail(count: int | None) -> str:

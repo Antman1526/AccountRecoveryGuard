@@ -9,10 +9,10 @@ from email.message import EmailMessage, Message
 from email.utils import parsedate_to_datetime, parseaddr
 from html import unescape
 from typing import Iterable
-from urllib.parse import urlparse
 
 from bs4 import BeautifulSoup
 
+from .domain_safety import https_url_matches_domain
 from .models import CompromisedAccountFinding, Severity
 
 RISK_PATTERNS: tuple[tuple[re.Pattern[str], str, int], ...] = (
@@ -61,6 +61,9 @@ class EmailClassifier:
         reset_link = extract_reset_link(body)
         if reset_link:
             score += 1
+            if not https_url_matches_domain(reset_link, sender_domain):
+                score += 5
+                reasons.append("reset/security link domain mismatch")
 
         return CompromisedAccountFinding(
             service_name=service_name_from_domain(sender_domain),

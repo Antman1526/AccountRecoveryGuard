@@ -28,6 +28,38 @@ def test_classifier_extracts_high_severity_reset_alert():
     assert finding.severity == "high"
 
 
+def test_classifier_flags_mismatched_reset_link_as_phishing_risk():
+    msg = _message(
+        "Security alert: your account password was reset",
+        "Dropbox Security <security@dropbox.com>",
+        "If this was not you, visit https://dropbox.example.com/reset?token=abc",
+    )
+
+    finding = EmailClassifier().classify(msg)
+
+    assert finding is not None
+    assert finding.sender_domain == "dropbox.com"
+    assert finding.reset_link == "https://dropbox.example.com/reset?token=abc"
+    assert "reset/security link domain mismatch" in finding.reasons
+    assert finding.severity == "critical"
+
+
+def test_classifier_allows_same_service_reset_link_subdomain():
+    msg = _message(
+        "Security alert: your account password was reset",
+        "Dropbox Security <security@security.dropbox.com>",
+        "If this was not you, visit https://accounts.dropbox.com/reset?token=abc",
+    )
+
+    finding = EmailClassifier().classify(msg)
+
+    assert finding is not None
+    assert finding.sender_domain == "security.dropbox.com"
+    assert finding.reset_link == "https://accounts.dropbox.com/reset?token=abc"
+    assert "reset/security link domain mismatch" not in finding.reasons
+    assert finding.severity == "high"
+
+
 def test_classifier_ignores_unrelated_newsletter():
     msg = _message(
         "June newsletter",

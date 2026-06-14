@@ -207,6 +207,17 @@ def test_account_review_trusts_https_reset_link_on_expected_subdomain():
     assert account.reset_link_is_trusted is True
 
 
+def test_account_review_trusts_https_reset_link_on_same_service_domain():
+    account = AccountReview(
+        service_name="Dropbox",
+        username="me@example.com",
+        url="https://security.dropbox.com",
+        reset_link="https://accounts.dropbox.com/reset",
+    )
+
+    assert account.reset_link_is_trusted is True
+
+
 def test_account_review_blocks_http_or_mismatched_reset_link():
     http_link = AccountReview(
         service_name="Dropbox",
