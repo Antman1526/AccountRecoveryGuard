@@ -2,7 +2,14 @@ from account_recovery_guard.gui_workflow import build_command_preview
 from account_recovery_guard.gui_workflow import build_protection_plan
 from account_recovery_guard.gui_workflow import consumer_readiness_rows
 from account_recovery_guard.gui_workflow import password_exposure_prompt_lines
-from account_recovery_guard.gui_workflow import recovery_stages, rotation_copy_confirmation_text, safe_recovery_scope_lines, suggested_next_actions
+from account_recovery_guard.gui_workflow import (
+    recovery_stages,
+    rotation_copy_confirmation_text,
+    safe_recovery_scope_lines,
+    suggested_next_actions,
+    vault_sync_confirmation_texts,
+    vault_sync_ready,
+)
 from account_recovery_guard.gui_state import ScanSummary, VaultSyncStatus
 from account_recovery_guard.models import CompromisedAccountFinding
 from account_recovery_guard.readiness import ReadinessCheck
@@ -68,6 +75,17 @@ def test_rotation_copy_confirmation_distinguishes_verified_and_manual_paths():
     assert "official app" in trusted
     assert "official website or app" in untrusted
     assert "suspicious email link" in untrusted
+
+
+def test_vault_sync_confirmation_requires_real_account_success():
+    changed_text, verified_text = vault_sync_confirmation_texts()
+
+    assert "official website or app" in changed_text
+    assert "confirmed the new password works" in verified_text
+    assert vault_sync_ready(False, False) is False
+    assert vault_sync_ready(True, False) is False
+    assert vault_sync_ready(False, True) is False
+    assert vault_sync_ready(True, True) is True
 
 
 def test_safe_recovery_scope_is_clear_on_first_launch():

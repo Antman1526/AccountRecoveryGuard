@@ -110,6 +110,17 @@ def rotation_copy_confirmation_text(reset_link_is_trusted: bool) -> str:
     return "I am on the official website or app, not a suspicious email link."
 
 
+def vault_sync_confirmation_texts() -> tuple[str, str]:
+    return (
+        "I changed this password on the official website or app.",
+        "I confirmed the new password works by signing in or completing the provider's success step.",
+    )
+
+
+def vault_sync_ready(changed_on_service: bool, sign_in_confirmed: bool) -> bool:
+    return changed_on_service and sign_in_confirmed
+
+
 def safe_recovery_scope_lines() -> list[str]:
     return [
         "The safe path is mailbox evidence plus the free HIBP k-anonymous password check.",

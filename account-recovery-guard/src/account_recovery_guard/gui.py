@@ -15,6 +15,8 @@ from .gui_workflow import (
     rotation_copy_confirmation_text,
     safe_recovery_scope_lines,
     suggested_next_actions,
+    vault_sync_confirmation_texts,
+    vault_sync_ready,
 )
 from .gui_theme import calm_shield_stylesheet
 from .passkeys import passkey_guidance
@@ -864,14 +866,26 @@ def main() -> int:
                 official.setCursor(Qt.CursorShape.PointingHandCursor)
                 official.clicked.connect(lambda checked=False, link=account.url: webbrowser.open(link))
                 button_row.addWidget(official)
-            confirmed = QCheckBox("I changed this password on the website")
+            changed_text, verified_text = vault_sync_confirmation_texts()
+            confirmed = QCheckBox(changed_text)
+            verified = QCheckBox(verified_text)
             sync_vaults = QPushButton("Prepare vault sync")
             sync_vaults.setObjectName("secondaryButton")
             sync_vaults.setCursor(Qt.CursorShape.PointingHandCursor)
             sync_vaults.setEnabled(False)
-            confirmed.stateChanged.connect(lambda state, button=sync_vaults: button.setEnabled(state != 0))
+            confirmed.stateChanged.connect(
+                lambda state, changed=confirmed, checked=verified, button=sync_vaults: button.setEnabled(
+                    vault_sync_ready(changed.isChecked(), checked.isChecked())
+                )
+            )
+            verified.stateChanged.connect(
+                lambda state, changed=confirmed, checked=verified, button=sync_vaults: button.setEnabled(
+                    vault_sync_ready(changed.isChecked(), checked.isChecked())
+                )
+            )
             sync_vaults.clicked.connect(self._prepare_vault_sync_after_rotation)
             button_row.addWidget(confirmed)
+            button_row.addWidget(verified)
             button_row.addWidget(sync_vaults)
             back = QPushButton("Back to results")
             back.setObjectName("secondaryButton")

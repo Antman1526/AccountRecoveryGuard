@@ -463,7 +463,9 @@ def _rotate(args: argparse.Namespace) -> None:
         print(f"Selected password: {selected.password}")
     if args.open and args.reset_link:
         open_reset_link(args.reset_link)
-    confirmation = input("After changing the password on the service, type ROTATED to update vaults: ").strip()
+    confirmation = input(
+        "After changing the password and confirming the new password works, type ROTATED to update vaults: "
+    ).strip()
     if confirmation != "ROTATED":
         raise SystemExit("Vault write skipped because rotation was not confirmed.")
     if not args.skip_bitwarden:

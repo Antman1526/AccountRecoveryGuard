@@ -293,7 +293,7 @@ The GUI opens to a guided first-run flow:
 - Use the password-exposure result to guide rotation without overstating certainty: if the checked password was found, rotate only accounts where you reused it, one at a time.
 - Open reset links only when they use HTTPS and match the expected service domain; otherwise use the official site or app manually.
 - Require confirmation that you are on the official site/app or verified reset page before copying a generated password.
-- Rotate passwords with masked choices, then prepare vault sync only after confirming the password was changed on the real service.
+- Rotate passwords with masked choices, then prepare vault sync only after confirming the password was changed on the real service and the new password works.
 - Stage the NordPass import CSV from the guided rotation flow, import it immediately, verify, and delete it after use with the in-app cleanup button.
 
 After a scan exists, the dashboard shows an account safety summary, accounts needing attention, vault sync status, cleanup reminders, and secondary advanced tools for troubleshooting.
@@ -358,7 +358,7 @@ arg rotate \
   --copy-selected
 ```
 
-The command shows five masked generated passwords, reveals only the one you choose, opens the reset link if requested, waits for you to complete MFA/CAPTCHA/passkey prompts manually, then only writes vaults after you type `ROTATED`.
+The command shows five masked generated passwords, reveals only the one you choose, opens the reset link if requested, waits for you to complete MFA/CAPTCHA/passkey prompts manually, then only writes vaults after you confirm the new password works and type `ROTATED`.
 
 Store a generated password in the OS credential store. Omit the value so it is entered at the hidden prompt:
 
