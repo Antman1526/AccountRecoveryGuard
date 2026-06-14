@@ -21,6 +21,16 @@ class ReadinessRow:
     tone: str = "safe"
 
 
+@dataclass(frozen=True)
+class ProtectionPlan:
+    headline: str
+    known: str
+    unknown: str
+    next_action: str
+    guardrail: str
+    tone: str = "safe"
+
+
 def build_command_preview(command: str, options: dict[str, Any]) -> str:
     parts = ["account-recovery-guard", command]
     for key, value in options.items():
@@ -100,6 +110,67 @@ def safe_recovery_scope_lines() -> list[str]:
         "That boundary protects you from unsafe sources, unreliable results, and exposing credentials further.",
         "Start by scanning one authorized mailbox, then rotate only accounts with clear risk signals or reused exposed passwords.",
     ]
+
+
+def build_protection_plan(
+    scan_summary=None,
+    password_exposure_count: int | None = None,
+    vault_status=None,
+) -> ProtectionPlan:
+    csv_cleanup_needed = bool(getattr(vault_status, "requires_csv_cleanup", False))
+    if scan_summary is None:
+        return ProtectionPlan(
+            headline="Start with one authorized mailbox",
+            known="No mailbox scan has run yet.",
+            unknown="The app cannot know which accounts need attention until it reviews authorized account and security emails.",
+            next_action="Connect Gmail, Outlook, or another email provider and run the local scan.",
+            guardrail="Stay on the safe path: mailbox evidence plus the free HIBP k-anonymous password check.",
+            tone="attention",
+        )
+
+    if csv_cleanup_needed:
+        return ProtectionPlan(
+            headline="Finish vault cleanup",
+            known="A NordPass import CSV was staged for manual import.",
+            unknown="The app cannot prove NordPass matches Bitwarden until you import the CSV, export from NordPass, and verify drift.",
+            next_action="Import the CSV into NordPass, verify both vaults, then delete the staged CSV.",
+            guardrail="The CSV contains plaintext passwords because NordPass import requires it; keep it local and remove it after import.",
+            tone="attention",
+        )
+
+    if password_exposure_count is not None and password_exposure_count > 0:
+        return ProtectionPlan(
+            headline="A reused password needs attention",
+            known="The checked old password appears in HIBP Pwned Passwords.",
+            unknown="The app does not know every account where you used that password.",
+            next_action="Rotate only the accounts where you reused it, starting with the highest-risk alert or most important account.",
+            guardrail="This is not a whole-web search; it is a free k-anonymous breach-corpus check.",
+            tone="attention",
+        )
+
+    if scan_summary.accounts_needing_attention > 0:
+        service = scan_summary.recommended.service_name.title() if scan_summary.recommended else "the first account"
+        return ProtectionPlan(
+            headline="Review the highest-risk alert first",
+            known=scan_summary.attention_text,
+            unknown="Mailbox alerts are risk signals, not proof that every listed account was taken over.",
+            next_action=f"Start with {service}. Confirm activity on the official site, then rotate that one account if needed.",
+            guardrail="Use official websites or verified reset links; complete MFA yourself.",
+            tone="attention",
+        )
+
+    if password_exposure_count == 0:
+        known = "No urgent mailbox alerts were found, and the checked password was not found in HIBP Pwned Passwords."
+    else:
+        known = "No urgent mailbox alerts were found in this scan."
+    return ProtectionPlan(
+        headline="No urgent alerts found",
+        known=known,
+        unknown="This does not prove every account is safe or that private breach data does not exist.",
+        next_action="Keep passwords unique, check any old reused password, and rescan later if new security emails arrive.",
+        guardrail="The app avoids unsafe paste sites, dark-web dumps, private forums, and random pages with plaintext passwords.",
+        tone="safe",
+    )
 
 
 def consumer_readiness_rows(checks) -> list[ReadinessRow]:

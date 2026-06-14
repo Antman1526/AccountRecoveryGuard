@@ -7,6 +7,7 @@ from pathlib import Path
 from .clipboard import copy_text
 from .exposure import SAFE_EXPOSURE_BOUNDARY
 from .gui_workflow import (
+    build_protection_plan,
     build_command_preview,
     consumer_readiness_rows,
     password_exposure_prompt_lines,
@@ -543,6 +544,7 @@ def main() -> int:
                     "Step 3 of 3",
                 )
             )
+            self.results_layout.addWidget(self._protection_plan_card())
             if summary.recommended is None:
                 self._render_empty_results(summary)
                 return
@@ -613,6 +615,7 @@ def main() -> int:
                 )
                 subtitle = summary.attention_text if summary else "Results will appear here after the scanner finishes."
                 self.results_layout.addWidget(StepHeader(title, subtitle, "Step 3 of 3"))
+                self.results_layout.addWidget(self._protection_plan_card(summary))
                 empty = Card("No accounts need attention" if summary else "No results yet")
                 empty.body.addWidget(
                     self._body_label(
@@ -895,6 +898,8 @@ def main() -> int:
             status = Card("Current status")
             self.dashboard_summary_label = self._body_label("Connect email and run a scan to begin.", "listText")
             status.body.addWidget(self.dashboard_summary_label)
+            self.dashboard_plan_label = self._body_label("", "listText")
+            status.body.addWidget(self.dashboard_plan_label)
             layout.addWidget(status)
 
             layout.addWidget(self._password_exposure_card("Check a reused password"))
@@ -983,6 +988,9 @@ def main() -> int:
                 self._fill_checklist_card(self.dashboard_checklist_card)
             if summary is None:
                 self.dashboard_summary_label.setText("Connect email and run a scan to begin.")
+                if hasattr(self, "dashboard_plan_label"):
+                    plan = build_protection_plan(None, self.state.password_exposure_count, self.state.vault_status)
+                    self.dashboard_plan_label.setText(f"{plan.headline}: {plan.next_action}")
                 if hasattr(self, "dashboard_vault_status_label"):
                     self.dashboard_vault_status_label.setText("Run a scan before verifying vault sync.")
                     self.dashboard_vault_cleanup_label.setText("No staged NordPass CSV cleanup is pending.")
@@ -997,6 +1005,9 @@ def main() -> int:
             self.dashboard_summary_label.setText(
                 f"{self.state.protected_person_prefix}{summary.headline}. {summary.attention_text} {vault_text}{cleanup_text}"
             )
+            if hasattr(self, "dashboard_plan_label"):
+                plan = build_protection_plan(summary, self.state.password_exposure_count, self.state.vault_status)
+                self.dashboard_plan_label.setText(f"{plan.headline}: {plan.next_action}")
             if hasattr(self, "dashboard_vault_status_label"):
                 self.dashboard_vault_status_label.setText(f"Bitwarden status: {vault_text}")
                 self.dashboard_vault_cleanup_label.setText(
@@ -1080,6 +1091,23 @@ def main() -> int:
             form.addWidget(status, 2, 0, 1, 2)
             form.addWidget(check_button, 3, 1, alignment=Qt.AlignmentFlag.AlignRight)
             card.body.addLayout(form)
+            return card
+
+        def _protection_plan_card(self, summary: ScanSummary | None = None) -> Card:
+            plan = build_protection_plan(
+                self.state.scan_summary if summary is None else summary,
+                self.state.password_exposure_count,
+                self.state.vault_status,
+            )
+            card = Card("Plain-English protection plan")
+            card.body.addWidget(StatusPill("needs attention" if plan.tone == "attention" else "safe", plan.tone))
+            for label, text in (
+                ("What we know", plan.known),
+                ("What we cannot prove", plan.unknown),
+                ("Next safe action", plan.next_action),
+                ("Guardrail", plan.guardrail),
+            ):
+                card.body.addWidget(self._body_label(f"{label}: {text}", "listText"))
             return card
 
         def _sidebar(self) -> QFrame:

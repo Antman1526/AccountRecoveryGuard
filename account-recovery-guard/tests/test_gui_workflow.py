@@ -1,7 +1,10 @@
 from account_recovery_guard.gui_workflow import build_command_preview
+from account_recovery_guard.gui_workflow import build_protection_plan
 from account_recovery_guard.gui_workflow import consumer_readiness_rows
 from account_recovery_guard.gui_workflow import password_exposure_prompt_lines
 from account_recovery_guard.gui_workflow import recovery_stages, safe_recovery_scope_lines, suggested_next_actions
+from account_recovery_guard.gui_state import ScanSummary, VaultSyncStatus
+from account_recovery_guard.models import CompromisedAccountFinding
 from account_recovery_guard.readiness import ReadinessCheck
 
 
@@ -88,3 +91,76 @@ def test_consumer_readiness_rows_keep_free_manual_and_paid_boundaries_clear():
     assert by_title["NordPass sync"].status == "manual"
     assert by_title["HIBP email-breach lookup"].status == "paid optional"
     assert "macOS app signing" not in by_title
+
+
+def test_protection_plan_starts_with_one_authorized_mailbox():
+    plan = build_protection_plan()
+
+    assert plan.headline == "Start with one authorized mailbox"
+    assert "No mailbox scan has run yet" in plan.known
+    assert "Connect Gmail" in plan.next_action
+    assert "safe path" in plan.guardrail
+    assert plan.tone == "attention"
+
+
+def test_protection_plan_prioritizes_high_risk_mailbox_alert_without_overclaiming():
+    summary = ScanSummary.from_findings(
+        [
+            CompromisedAccountFinding(
+                service_name="github",
+                sender_domain="github.com",
+                sender="security@github.com",
+                subject="Suspicious login detected",
+                timestamp=None,
+                severity="high",
+                reasons=["suspicious activity"],
+            )
+        ],
+        discovered_count=1,
+    )
+
+    plan = build_protection_plan(summary)
+
+    assert plan.headline == "Review the highest-risk alert first"
+    assert "1 account needs attention" in plan.known
+    assert "not proof" in plan.unknown
+    assert "Start with Github" in plan.next_action
+    assert "official" in plan.guardrail
+    assert "all sites" not in " ".join((plan.known, plan.unknown, plan.next_action, plan.guardrail)).lower()
+
+
+def test_protection_plan_for_exposed_reused_password_stays_free_and_specific():
+    summary = ScanSummary.from_findings([], discovered_count=3)
+
+    plan = build_protection_plan(summary, password_exposure_count=12)
+
+    assert plan.headline == "A reused password needs attention"
+    assert "appears in HIBP Pwned Passwords" in plan.known
+    assert "does not know every account" in plan.unknown
+    assert "where you reused it" in plan.next_action
+    assert "free k-anonymous" in plan.guardrail
+    assert "whole-web search" in plan.guardrail
+
+
+def test_protection_plan_prioritizes_plaintext_csv_cleanup():
+    summary = ScanSummary.from_findings([], discovered_count=0)
+    vault_status = VaultSyncStatus(bitwarden="updated", nordpass="csv_prepared", csv_path="/tmp/nordpass.csv")
+
+    plan = build_protection_plan(summary, password_exposure_count=0, vault_status=vault_status)
+
+    assert plan.headline == "Finish vault cleanup"
+    assert "NordPass import CSV" in plan.known
+    assert "delete the staged CSV" in plan.next_action
+    assert "plaintext passwords" in plan.guardrail
+    assert plan.tone == "attention"
+
+
+def test_protection_plan_for_clean_scan_keeps_uncertainty_visible():
+    summary = ScanSummary.from_findings([], discovered_count=0)
+
+    plan = build_protection_plan(summary, password_exposure_count=0)
+
+    assert plan.headline == "No urgent alerts found"
+    assert "not found in HIBP" in plan.known
+    assert "does not prove every account is safe" in plan.unknown
+    assert "unsafe paste sites" in plan.guardrail
