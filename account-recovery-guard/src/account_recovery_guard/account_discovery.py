@@ -12,6 +12,10 @@ ACCOUNT_SIGNAL_PATTERNS: tuple[tuple[re.Pattern[str], str, int], ...] = (
     (re.compile(r"\bverify\b|\bconfirm\b.*\b(account|email)\b", re.I), "account verification email", 3),
     (re.compile(r"\bnew\s+(login|sign-?in)\b|\bsecurity alert\b", re.I), "login/security email", 4),
     (re.compile(r"\bpassword\b|\brecovery\b|\breset\b", re.I), "password/recovery email", 4),
+    (re.compile(r"\bmfa\b|\b2fa\b|\btwo[-\s]?factor\b|\bpasskey\b|\bauthenticator\b", re.I), "MFA/passkey account email", 4),
+    (re.compile(r"\bsecurity\s+(settings?|preferences?)\b|\baccount\s+settings\b", re.I), "account settings email", 3),
+    (re.compile(r"\bsubscription\b|\btrial\b|\bmembership\b|\bplan\b", re.I), "subscription/account email", 2),
+    (re.compile(r"\bpayment\b|\bbilling\b|\bstatement\b|\bcharged\b|\brenewal\b", re.I), "billing account email", 2),
     (re.compile(r"\breceipt\b|\binvoice\b|\border\b", re.I), "transactional account email", 2),
 )
 
@@ -40,13 +44,15 @@ class AccountDiscovery:
             if service in IGNORED_SERVICE_NAMES or not domain:
                 continue
             haystack = f"{subject}\n{extract_body(message)}"
+            matched = False
             for pattern, reason, weight in ACCOUNT_SIGNAL_PATTERNS:
                 if pattern.search(haystack):
                     scores[service] += weight
-                    counts[service] += 1
                     domains[service] = domain
                     reasons[service].add(reason)
-                    break
+                    matched = True
+            if matched:
+                counts[service] += 1
 
         accounts = [
             DiscoveredAccount(

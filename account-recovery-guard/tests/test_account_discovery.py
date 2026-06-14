@@ -35,3 +35,39 @@ def test_account_discovery_counts_repeated_service_signals():
 
     assert accounts[0].service_name == "example"
     assert accounts[0].message_count == 2
+
+
+def test_account_discovery_collects_multiple_reasons_without_double_counting_message():
+    messages = [
+        _message(
+            "Your subscription renewal receipt",
+            "billing@example.com",
+            "Your account settings and passkey were updated after payment.",
+        )
+    ]
+
+    accounts = AccountDiscovery().discover(messages)
+
+    assert len(accounts) == 1
+    account = accounts[0]
+    assert account.service_name == "example"
+    assert account.message_count == 1
+    assert account.confidence == "high"
+    assert "subscription/account email" in account.reasons
+    assert "billing account email" in account.reasons
+    assert "transactional account email" in account.reasons
+    assert "MFA/passkey account email" in account.reasons
+    assert "account settings email" in account.reasons
+
+
+def test_account_discovery_finds_security_setting_and_mfa_account_mail():
+    messages = [
+        _message("Your security settings changed", "security@example.com", "Authenticator and two-factor settings changed."),
+    ]
+
+    accounts = AccountDiscovery().discover(messages)
+
+    assert accounts[0].service_name == "example"
+    assert accounts[0].message_count == 1
+    assert "account settings email" in accounts[0].reasons
+    assert "MFA/passkey account email" in accounts[0].reasons

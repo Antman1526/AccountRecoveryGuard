@@ -48,7 +48,7 @@ flowchart TD
 
 The runnable implementation uses IMAP over TLS for broad compatibility. It scans recent mailbox messages, classifies subjects/bodies/senders for breach and security-alert language, extracts reset/recovery/security links, and returns service name, sender domain, reset link, timestamp, severity, and reasons.
 
-It also includes linked-account discovery. This does not log in to random websites or scrape the open web. It derives likely account relationships from authorized mailbox evidence such as welcome emails, verification emails, security alerts, password resets, and receipts.
+It also includes linked-account discovery. This does not log in to random websites or scrape the open web. It derives likely account relationships from authorized mailbox evidence such as welcome emails, verification emails, security alerts, password resets, MFA/passkey notices, billing/subscription emails, and receipts.
 
 For personal Gmail, the easiest consumer setup is now Gmail IMAP with a Google app password. The app password is entered once, stored in the OS credential store, and used over IMAP/TLS to scan Gmail's All Mail folder.
 
