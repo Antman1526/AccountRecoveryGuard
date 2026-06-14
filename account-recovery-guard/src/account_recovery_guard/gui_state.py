@@ -156,6 +156,7 @@ class VaultSyncStatus:
 class GuiAppState:
     current_step: GuiStep
     protected_person_label: str = "Me"
+    mailbox_username: str = ""
     mail_provider: MailProviderChoice | None = None
     scan_started: bool = False
     scan_summary: ScanSummary | None = None
@@ -178,9 +179,20 @@ class GuiAppState:
     def with_protected_person(self, label: str) -> "GuiAppState":
         return replace(self, protected_person_label=_normalize_person_label(label))
 
+    def with_scan_owner(self, label: str, mailbox_username: str) -> "GuiAppState":
+        return replace(
+            self,
+            protected_person_label=_normalize_person_label(label),
+            mailbox_username=_normalize_mailbox_username(mailbox_username),
+        )
+
     @property
     def protected_person_prefix(self) -> str:
         return f"{self.protected_person_label}: "
+
+    @property
+    def scan_username(self) -> str:
+        return self.mailbox_username or "you@example.com"
 
     @property
     def first_run_checklist(self) -> tuple[ChecklistItem, ...]:
@@ -228,6 +240,8 @@ class GuiAppState:
         return (
             "What we scan: account, login, password reset, and security alert emails that help identify websites tied "
             "to you and accounts that may need attention.\n\n"
+            "Safe scope: scan one mailbox at a time. For a second person, run a separate scan only when they are "
+            "present and have asked you to help.\n\n"
             "What we protect: we never log plaintext passwords, OAuth tokens, full email contents, or private keys.\n\n"
             "What stays local: classification results and generated recovery data stay on this computer unless you "
             "choose to export them."
@@ -302,6 +316,10 @@ def _normalize_person_label(label: str) -> str:
     if not normalized:
         return "Me"
     return normalized[:40]
+
+
+def _normalize_mailbox_username(username: str) -> str:
+    return " ".join(username.strip().split())[:254]
 
 
 def _password_exposure_checklist_detail(count: int | None) -> str:

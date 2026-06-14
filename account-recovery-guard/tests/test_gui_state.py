@@ -114,6 +114,21 @@ def test_protected_person_label_is_safe_and_nonempty():
     assert state.protected_person_prefix == "spouse mailbox: "
 
 
+def test_scan_owner_records_person_and_mailbox_for_guided_rotation():
+    state = GuiAppState.new().with_scan_owner("  second   person  ", "  helper@example.com  ")
+
+    assert state.protected_person_label == "second person"
+    assert state.mailbox_username == "helper@example.com"
+    assert state.scan_username == "helper@example.com"
+
+
+def test_blank_scan_owner_mailbox_uses_visible_placeholder_only_as_fallback():
+    state = GuiAppState.new().with_scan_owner("Me", "   ")
+
+    assert state.mailbox_username == ""
+    assert state.scan_username == "you@example.com"
+
+
 def test_blank_protected_person_label_defaults_to_me():
     state = GuiAppState.new().with_protected_person("   ")
 
@@ -143,8 +158,29 @@ def test_consent_copy_explains_local_scan_boundaries():
     summary = state.consent_summary.lower()
 
     assert "what we scan" in summary
+    assert "one mailbox at a time" in summary
+    assert "second person" in summary
     assert "never log" in summary
     assert "local" in summary
+
+
+def test_account_reviews_use_recorded_mailbox_username():
+    finding = CompromisedAccountFinding(
+        service_name="dropbox",
+        sender_domain="dropbox.com",
+        sender="security@dropbox.com",
+        subject="Suspicious login",
+        timestamp=datetime(2026, 6, 13, tzinfo=UTC),
+        severity="high",
+        reasons=["suspicious activity"],
+    )
+    summary = ScanSummary.from_findings([finding], discovered_count=1)
+    state = GuiAppState.new().with_scan_owner("Me", "me@example.com")
+
+    reviews = summary.account_reviews(state.scan_username)
+
+    assert reviews[0].username == "me@example.com"
+    assert reviews[0].username != "you@example.com"
 
 
 def test_scan_summary_recommends_highest_risk_finding():

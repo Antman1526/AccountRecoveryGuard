@@ -242,6 +242,25 @@ def main() -> int:
                 form.addWidget(widget, row, 1)
                 self.setup_field_rows[field_key] = (label_widget, widget)
             setup.body.addLayout(form)
+            person_row = QHBoxLayout()
+            person_row.addWidget(self._body_label("Quick choices:", "listText"))
+            for label in ("Me", "Second person"):
+                person_button = QPushButton(label)
+                person_button.setObjectName("secondaryButton")
+                person_button.setCursor(Qt.CursorShape.PointingHandCursor)
+                person_button.clicked.connect(
+                    lambda checked=False, selected=label: self.setup_person_label.setText(selected)
+                )
+                person_row.addWidget(person_button)
+            person_row.addStretch(1)
+            setup.body.addLayout(person_row)
+            setup.body.addWidget(
+                self._body_label(
+                    "Protect one mailbox at a time. For a second person, start a separate scan only when they are "
+                    "present and have asked you to help.",
+                    "listText",
+                )
+            )
             self.setup_provider_note = self._body_label("", "listText")
             setup.body.addWidget(self.setup_provider_note)
             self.setup_gmail_advanced_oauth.stateChanged.connect(lambda: self._update_provider_setup_visibility())
@@ -270,7 +289,7 @@ def main() -> int:
             if self.state.mail_provider is None:
                 self._show_user_error("Choose a mail provider before starting the scan.", SETUP_DETAIL_MISSING_PROVIDER)
                 return
-            self.state = self.state.with_protected_person(self.setup_person_label.text())
+            self.state = self.state.with_scan_owner(self.setup_person_label.text(), self.setup_username.text())
             settings = MailProviderSettings(
                 provider=self.state.mail_provider,
                 username=self.setup_username.text(),
@@ -425,7 +444,7 @@ def main() -> int:
                 self._render_empty_results(summary)
                 return
 
-            accounts = summary.account_reviews("you@example.com")
+            accounts = summary.account_reviews(self.state.scan_username)
             account = accounts[0]
             card = Card("Next safest action")
             card.body.addWidget(StatusPill(account.risk_label, "attention" if account.risk_label == "Needs attention" else "safe"))
