@@ -1,4 +1,5 @@
 import os
+from pathlib import Path
 
 import pytest
 
@@ -65,6 +66,16 @@ def test_theme_covers_existing_gui_object_names():
     missing = [selector for selector in expected_selectors if selector not in css]
 
     assert not missing
+
+
+def test_advanced_rotation_copy_requires_official_page_confirmation():
+    gui_source = Path(__file__).parents[1] / "src" / "account_recovery_guard" / "gui.py"
+    source = gui_source.read_text(encoding="utf-8")
+
+    assert "official_page_confirmed = QCheckBox" in source
+    assert "official_page_confirmed.isChecked()" in source
+    assert "copy_button.setEnabled(False)" in source
+    assert "official_page_confirmed.stateChanged.connect" in source
 
 
 @pytestmark_widgets
