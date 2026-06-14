@@ -423,3 +423,20 @@ def test_app_state_records_vault_status_update():
 
     assert state.vault_status == status
     assert state.vault_status.requires_csv_cleanup is True
+
+
+def test_csv_cleanup_completion_clears_plaintext_csv_path():
+    status = VaultSyncStatus(
+        bitwarden="updated",
+        nordpass="csv_prepared",
+        verification="pending",
+        csv_path="/tmp/nordpass.csv",
+    )
+    state = GuiAppState.new().with_vault_status(status)
+
+    cleaned = state.with_csv_cleanup_complete()
+
+    assert cleaned.vault_status.bitwarden == "updated"
+    assert cleaned.vault_status.nordpass == "import_needed"
+    assert cleaned.vault_status.csv_path is None
+    assert cleaned.vault_status.requires_csv_cleanup is False

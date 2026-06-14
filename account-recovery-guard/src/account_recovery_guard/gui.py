@@ -11,7 +11,7 @@ from .gui_theme import calm_shield_stylesheet
 from .passkeys import passkey_guidance
 from .paths import user_state_dir
 from .rotation import build_rotation_choices, summarize_rotation_choices
-from .secure_files import plaintext_file_warning
+from .secure_files import delete_file, plaintext_file_warning
 
 
 def main() -> int:
@@ -665,6 +665,11 @@ def main() -> int:
             )
             if self.state.vault_status.requires_csv_cleanup:
                 vault_card.body.addWidget(self._body_label(self.state.vault_status.cleanup_message, "listText"))
+                delete_csv = QPushButton("Delete staged CSV after import")
+                delete_csv.setObjectName("secondaryButton")
+                delete_csv.setCursor(Qt.CursorShape.PointingHandCursor)
+                delete_csv.clicked.connect(self._delete_staged_nordpass_csv)
+                vault_card.body.addWidget(delete_csv)
             self.rotation_layout.addWidget(vault_card)
 
             actions = Card("Next action")
@@ -825,6 +830,11 @@ def main() -> int:
             self.dashboard_vault_card.body.addWidget(self.dashboard_vault_cleanup_label)
             vault_buttons = QHBoxLayout()
             vault_buttons.addStretch(1)
+            self.dashboard_delete_csv_button = QPushButton("Delete staged CSV after import")
+            self.dashboard_delete_csv_button.setObjectName("secondaryButton")
+            self.dashboard_delete_csv_button.setCursor(Qt.CursorShape.PointingHandCursor)
+            self.dashboard_delete_csv_button.clicked.connect(self._delete_staged_nordpass_csv)
+            vault_buttons.addWidget(self.dashboard_delete_csv_button)
             close_vault = QPushButton("Close")
             close_vault.setObjectName("secondaryButton")
             close_vault.setCursor(Qt.CursorShape.PointingHandCursor)
@@ -870,6 +880,7 @@ def main() -> int:
                 if hasattr(self, "dashboard_vault_status_label"):
                     self.dashboard_vault_status_label.setText("Run a scan before verifying vault sync.")
                     self.dashboard_vault_cleanup_label.setText("No staged NordPass CSV cleanup is pending.")
+                    self.dashboard_delete_csv_button.setVisible(False)
                 return
             vault_text = self.state.vault_status.primary_message
             cleanup_text = (
@@ -887,6 +898,7 @@ def main() -> int:
                     if self.state.vault_status.requires_csv_cleanup
                     else "No staged NordPass CSV cleanup is pending."
                 )
+                self.dashboard_delete_csv_button.setVisible(self.state.vault_status.requires_csv_cleanup)
 
         def _show_vault_sync(self) -> None:
             self._refresh_dashboard()
@@ -894,6 +906,29 @@ def main() -> int:
                 self.dashboard_advanced_card.setVisible(False)
             if hasattr(self, "dashboard_vault_card"):
                 self.dashboard_vault_card.setVisible(True)
+
+        def _delete_staged_nordpass_csv(self) -> None:
+            csv_path = self.state.vault_status.csv_path
+            if not csv_path:
+                if hasattr(self, "rotation_status_label"):
+                    self.rotation_status_label.setText("No staged NordPass CSV cleanup is pending.")
+                return
+            deleted = delete_file(Path(csv_path))
+            self.state = self.state.with_csv_cleanup_complete()
+            message = (
+                "Staged NordPass CSV deleted."
+                if deleted
+                else "No staged NordPass CSV was found. Cleanup state has been cleared."
+            )
+            if hasattr(self, "rotation_layout"):
+                self._render_rotation_panel()
+            self._refresh_dashboard()
+            if hasattr(self, "rotation_status_label"):
+                self.rotation_status_label.setText(message)
+            if hasattr(self, "dashboard_vault_cleanup_label"):
+                self.dashboard_vault_cleanup_label.setText(message)
+            if hasattr(self, "dashboard_delete_csv_button"):
+                self.dashboard_delete_csv_button.setVisible(False)
 
         def _show_advanced_tools(self) -> None:
             self._refresh_dashboard()

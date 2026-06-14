@@ -289,6 +289,16 @@ class GuiAppState:
     def with_vault_status(self, status: VaultSyncStatus) -> "GuiAppState":
         return replace(self, vault_status=status)
 
+    def with_csv_cleanup_complete(self) -> "GuiAppState":
+        return replace(
+            self,
+            vault_status=replace(
+                self.vault_status,
+                nordpass="import_needed",
+                csv_path=None,
+            ),
+        )
+
     @property
     def password_exposure_rotation_guidance(self) -> str | None:
         if self.password_exposure_count is None:
