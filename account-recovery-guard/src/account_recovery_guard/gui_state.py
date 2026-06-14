@@ -77,6 +77,19 @@ class ScanSummary:
             return "1 account needs attention."
         return f"{self.accounts_needing_attention} accounts need attention."
 
+    def account_reviews(self, username: str, limit: int | None = None) -> tuple[AccountReview, ...]:
+        findings = self.findings[:limit] if limit is not None else self.findings
+        return tuple(AccountReview.from_finding(finding, username) for finding in findings)
+
+    @property
+    def next_safest_action(self) -> str:
+        if self.recommended is None:
+            return "No urgent alerts were found. Review vault sync and keep monitoring this mailbox."
+        service_name = self.recommended.service_name.title()
+        if self.recommended.severity in {"critical", "high"}:
+            return f"Start with {service_name}. Review the alert, confirm the site, then rotate only that account first."
+        return f"Review {service_name} first, then rotate only if the alert matches activity you do not recognize."
+
 
 @dataclass(frozen=True)
 class RotationSession:

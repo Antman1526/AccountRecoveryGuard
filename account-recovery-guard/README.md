@@ -272,7 +272,7 @@ The GUI opens to a guided first-run flow:
 - Connect Gmail, Outlook, or Other Email.
 - See only the provider setup fields that apply to the selected provider.
 - Review scan consent and provider setup before scanning starts.
-- Review recommended accounts found by the scan.
+- Review a clear next safest action plus the accounts needing attention found by the scan.
 - Rotate passwords with masked choices and sync vaults.
 
 After a scan exists, the dashboard shows an account safety summary, accounts needing attention, vault sync status, cleanup reminders, and secondary advanced tools for troubleshooting.

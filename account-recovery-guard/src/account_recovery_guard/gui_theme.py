@@ -81,6 +81,17 @@ def calm_shield_stylesheet() -> str:
         color: #45625d;
         line-height: 1.35;
     }
+    QFrame#accountRow {
+        background: #f8fcfb;
+        border: 1px solid #dce9e5;
+        border-radius: 10px;
+    }
+    QLabel#rowTitle {
+        background: transparent;
+        color: #15352f;
+        font-size: 15px;
+        font-weight: 800;
+    }
     QLabel#badge {
         background: #e4f4ef;
         color: #155f57;

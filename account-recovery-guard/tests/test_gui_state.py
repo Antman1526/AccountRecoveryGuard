@@ -96,6 +96,60 @@ def test_scan_summary_recommends_highest_risk_finding():
     assert summary.headline == "Your scan found 12 accounts"
 
 
+def test_scan_summary_builds_ordered_account_reviews_for_results_list():
+    high = CompromisedAccountFinding(
+        service_name="dropbox",
+        sender_domain="dropbox.com",
+        sender="security@dropbox.com",
+        subject="Suspicious login",
+        timestamp=datetime(2026, 6, 13, tzinfo=UTC),
+        severity="high",
+        reasons=["suspicious activity"],
+    )
+    medium = CompromisedAccountFinding(
+        service_name="github",
+        sender_domain="github.com",
+        sender="security@github.com",
+        subject="New login",
+        timestamp=datetime(2026, 6, 13, tzinfo=UTC),
+        severity="medium",
+        reasons=["new login/access alert"],
+    )
+
+    summary = ScanSummary.from_findings([medium, high], discovered_count=2)
+    reviews = summary.account_reviews("me@example.com")
+
+    assert [review.service_name for review in reviews] == ["Dropbox", "Github"]
+    assert reviews[0].risk_label == "Needs attention"
+    assert reviews[1].risk_label == "Review recommended"
+
+
+def test_scan_summary_next_safest_action_is_plain_language():
+    finding = CompromisedAccountFinding(
+        service_name="dropbox",
+        sender_domain="dropbox.com",
+        sender="security@dropbox.com",
+        subject="Suspicious login",
+        timestamp=datetime(2026, 6, 13, tzinfo=UTC),
+        severity="high",
+        reasons=["suspicious activity"],
+    )
+
+    summary = ScanSummary.from_findings([finding], discovered_count=1)
+
+    assert "Start with Dropbox" in summary.next_safest_action
+    assert "rotate only that account first" in summary.next_safest_action
+    assert "all accounts" not in summary.next_safest_action.lower()
+    assert "hunter2" not in summary.next_safest_action.lower()
+
+
+def test_empty_scan_summary_next_safest_action_avoids_rotation_pressure():
+    summary = ScanSummary.from_findings([], discovered_count=0)
+
+    assert "No urgent alerts" in summary.next_safest_action
+    assert "monitoring" in summary.next_safest_action
+
+
 def test_placeholder_scan_completion_enables_results_and_dashboard():
     state = GuiAppState.new().with_mail_provider(MailProviderChoice.GMAIL).start_scan()
 
