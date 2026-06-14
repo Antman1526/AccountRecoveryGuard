@@ -66,6 +66,7 @@ def main() -> int:
         build_provider_or_error,
         controlled_setup_detail_for_log,
         describe_provider_setup,
+        provider_setup_actions,
         provider_setup_note,
         provider_setup_steps,
         scan_progress_stages,
@@ -449,6 +450,22 @@ def main() -> int:
                 )
                 for index, step in enumerate(steps, start=1):
                     self.setup_steps_card.body.addWidget(self._body_label(f"{index}. {step}", "listText"))
+                actions = provider_setup_actions(
+                    self.state.mail_provider,
+                    self.setup_gmail_advanced_oauth.isChecked()
+                    if hasattr(self, "setup_gmail_advanced_oauth")
+                    else False,
+                )
+                if actions:
+                    action_row = QHBoxLayout()
+                    for action in actions:
+                        button = QPushButton(action.label)
+                        button.setObjectName("secondaryButton")
+                        button.setCursor(Qt.CursorShape.PointingHandCursor)
+                        button.clicked.connect(lambda checked=False, url=action.url: webbrowser.open(url))
+                        action_row.addWidget(button)
+                    action_row.addStretch(1)
+                    self.setup_steps_card.body.addLayout(action_row)
 
         def _show_user_error(self, message: str, technical_details: str) -> None:
             if hasattr(self, "setup_error_label"):

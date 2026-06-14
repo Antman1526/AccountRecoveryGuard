@@ -70,6 +70,12 @@ class ProviderSetupCopy:
 
 
 @dataclass(frozen=True)
+class ProviderSetupAction:
+    label: str
+    url: str
+
+
+@dataclass(frozen=True)
 class UserFacingSetupError:
     user_message: str
     technical_details: str
@@ -222,6 +228,27 @@ def provider_setup_steps(provider: MailProviderChoice | None, gmail_advanced_oau
         "Choose Gmail, Outlook, or Other Email.",
         "Scan one mailbox at a time and only scan a second person when they are present and asked for help.",
     )
+
+
+def provider_setup_actions(provider: MailProviderChoice | None, gmail_advanced_oauth: bool = False) -> tuple[ProviderSetupAction, ...]:
+    if provider == MailProviderChoice.GMAIL:
+        if gmail_advanced_oauth:
+            return (
+                ProviderSetupAction("Open Google Cloud credentials", "https://console.cloud.google.com/apis/credentials"),
+                ProviderSetupAction("Open Gmail OAuth help", "https://support.google.com/cloud/answer/6158849"),
+            )
+        return (
+            ProviderSetupAction("Open Google App Passwords", "https://myaccount.google.com/apppasswords"),
+            ProviderSetupAction("Open Google 2-Step Verification", "https://myaccount.google.com/signinoptions/two-step-verification"),
+        )
+    if provider == MailProviderChoice.OUTLOOK:
+        return (
+            ProviderSetupAction(
+                "Open Microsoft app registration help",
+                "https://learn.microsoft.com/en-us/entra/identity-platform/quickstart-register-app",
+            ),
+        )
+    return ()
 
 
 def build_provider_or_error(settings: MailProviderSettings) -> tuple[MailProvider | None, UserFacingSetupError | None]:

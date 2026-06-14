@@ -15,6 +15,7 @@ from account_recovery_guard.gui_services import (
     controlled_setup_detail_for_log,
     describe_provider_setup,
     provider_setup_note,
+    provider_setup_actions,
     provider_setup_steps,
     scan_progress_stages,
     visible_setup_fields,
@@ -144,6 +145,23 @@ def test_provider_setup_steps_warn_outlook_and_other_email_about_normal_password
     assert "normal Outlook password" in outlook
     assert "normal mailbox password" in other
     assert "OS credential store" in other
+
+
+def test_provider_setup_actions_open_only_official_https_setup_pages():
+    gmail = provider_setup_actions(MailProviderChoice.GMAIL)
+    gmail_advanced = provider_setup_actions(MailProviderChoice.GMAIL, gmail_advanced_oauth=True)
+    outlook = provider_setup_actions(MailProviderChoice.OUTLOOK)
+    other = provider_setup_actions(MailProviderChoice.OTHER_EMAIL)
+
+    all_actions = gmail + gmail_advanced + outlook
+    assert any(action.url == "https://myaccount.google.com/apppasswords" for action in gmail)
+    assert any("learn.microsoft.com" in action.url for action in outlook)
+    assert other == ()
+    assert all(action.url.startswith("https://") for action in all_actions)
+    assert all(
+        any(domain in action.url for domain in ("google.com", "cloud.google.com", "learn.microsoft.com"))
+        for action in all_actions
+    )
 
 
 def test_scan_progress_stages_are_plain_language():
