@@ -7,6 +7,27 @@ cd "$ROOT_DIR"
 PYTHON_BOOTSTRAP="${PYTHON:-python3}"
 BUILD_VENV="${BUILD_VENV:-.build-venv}"
 
+create_dmg_with_retries() {
+  local attempt
+  for attempt in 1 2 3; do
+    rm -f "$DMG_PATH"
+    if hdiutil create \
+      -volname "AccountRecoveryGuard" \
+      -srcfolder "$DMG_ROOT" \
+      -ov \
+      -format UDZO \
+      "$DMG_PATH"; then
+      return 0
+    fi
+    if [[ "$attempt" -lt 3 ]]; then
+      echo "hdiutil create failed on attempt $attempt; retrying after cleanup..." >&2
+      hdiutil detach "$DMG_ROOT" -force >/dev/null 2>&1 || true
+      sleep $((attempt * 3))
+    fi
+  done
+  return 1
+}
+
 "$PYTHON_BOOTSTRAP" -m venv "$BUILD_VENV"
 PYTHON_BIN="$BUILD_VENV/bin/python"
 
@@ -49,12 +70,7 @@ elif [[ -e "$DMG_ROOT/Applications" ]]; then
 fi
 ln -s /Applications "$DMG_ROOT/Applications"
 
-hdiutil create \
-  -volname "AccountRecoveryGuard" \
-  -srcfolder "$DMG_ROOT" \
-  -ov \
-  -format UDZO \
-  "$DMG_PATH"
+create_dmg_with_retries
 
 "$PYTHON_BIN" scripts/checksums.py "$DMG_PATH" > "dist/AccountRecoveryGuard-macOS.dmg.sha256"
 "$PYTHON_BIN" scripts/artifact_integrity.py verify "$DMG_PATH" "dist/AccountRecoveryGuard-macOS.dmg.sha256"
