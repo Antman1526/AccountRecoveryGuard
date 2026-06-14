@@ -71,6 +71,7 @@ def test_consumer_readiness_rows_keep_free_manual_and_paid_boundaries_clear():
     rows = consumer_readiness_rows(
         (
             ReadinessCheck("OS credential store", "ready", "Secrets use the OS credential store."),
+            ReadinessCheck("Staged NordPass CSV cleanup", "action_needed", "Delete the stale CSV."),
             ReadinessCheck("Bitwarden session", "action_needed", "Unlock Bitwarden yourself."),
             ReadinessCheck("NordPass sync", "manual_required", "Import the CSV into NordPass."),
             ReadinessCheck("HIBP email-breach lookup", "paid_optional", "Requires a HIBP API key."),
@@ -80,6 +81,8 @@ def test_consumer_readiness_rows_keep_free_manual_and_paid_boundaries_clear():
     by_title = {row.title: row for row in rows}
 
     assert by_title["OS credential store"].status == "ready"
+    assert by_title["Staged NordPass CSV cleanup"].status == "needs setup"
+    assert by_title["Staged NordPass CSV cleanup"].tone == "attention"
     assert by_title["Bitwarden session"].status == "needs setup"
     assert by_title["Bitwarden session"].tone == "attention"
     assert by_title["NordPass sync"].status == "manual"

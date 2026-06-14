@@ -111,6 +111,7 @@ def consumer_readiness_rows(checks) -> list[ReadinessRow]:
         "Desktop GUI",
         "Reset browser helper",
         "Free password exposure check",
+        "Staged NordPass CSV cleanup",
         "Bitwarden session",
         "NordPass sync",
         "HIBP email-breach lookup",

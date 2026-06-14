@@ -1,3 +1,5 @@
+from pathlib import Path
+
 from account_recovery_guard.readiness import build_readiness_checks
 
 
@@ -6,6 +8,7 @@ def test_readiness_includes_free_and_paid_optional_boundaries():
     by_name = {check.name: check for check in checks}
 
     assert by_name["Free password exposure check"].status == "ready"
+    assert by_name["Staged NordPass CSV cleanup"].status == "ready"
     assert "no HIBP API key" in by_name["Free password exposure check"].detail
     assert by_name["HIBP email-breach lookup"].status == "paid_optional"
     assert by_name["macOS app signing"].status == "paid_optional"
@@ -20,3 +23,17 @@ def test_readiness_does_not_expose_hibp_secret_value(monkeypatch):
 
     assert hibp.status == "ready"
     assert "super-secret-key" not in hibp.detail
+
+
+def test_readiness_flags_stale_staged_nordpass_csv(monkeypatch):
+    monkeypatch.setattr(
+        "account_recovery_guard.readiness.staged_nordpass_csv_warning",
+        lambda: (Path("/tmp/nordpass-import.csv"), "Plaintext CSV is older than 300 seconds; import or delete it now."),
+    )
+
+    checks = build_readiness_checks()
+    cleanup = next(check for check in checks if check.name == "Staged NordPass CSV cleanup")
+
+    assert cleanup.status == "action_needed"
+    assert "import or delete" in cleanup.detail
+    assert "/tmp/nordpass-import.csv" in cleanup.detail

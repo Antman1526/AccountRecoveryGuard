@@ -19,7 +19,7 @@ from .passkeys import passkey_guidance
 from .paths import user_state_dir
 from .readiness import build_readiness_checks
 from .rotation import build_rotation_choices, summarize_rotation_choices
-from .secure_files import delete_file, plaintext_file_warning
+from .secure_files import default_nordpass_import_csv_path, delete_file, staged_nordpass_csv_warning
 
 
 def main() -> int:
@@ -868,7 +868,7 @@ def main() -> int:
                 return
 
             vault_service = self._build_vault_service()
-            nordpass_path = user_state_dir() / "nordpass-import.csv"
+            nordpass_path = default_nordpass_import_csv_path()
             sync_result = vault_service.prepare_guided_sync(selected, nordpass_path)
             self.state = self.state.with_vault_status(sync_result.status)
             self._render_rotation_panel()
@@ -1613,10 +1613,28 @@ def main() -> int:
             update_exposure_preview()
             layout.addWidget(exposure_box)
 
-            csv_warning = QLabel(plaintext_file_warning(Path("nordpass-import.csv")) or "No stale NordPass CSV detected in the current folder.")
-            csv_warning.setObjectName("warningText")
-            csv_warning.setWordWrap(True)
-            layout.addWidget(csv_warning)
+            staged_csv_box = QGroupBox("Staged NordPass CSV cleanup")
+            staged_csv_box.setObjectName("group")
+            staged_csv_layout = QVBoxLayout(staged_csv_box)
+            staged_warning = staged_nordpass_csv_warning()
+            staged_path = default_nordpass_import_csv_path()
+            self.security_csv_warning_label = QLabel(
+                f"{staged_warning[1]} Location: {staged_warning[0]}"
+                if staged_warning
+                else f"No stale NordPass CSV detected in the app data folder: {staged_path}"
+            )
+            self.security_csv_warning_label.setObjectName("warningText" if staged_warning else "listText")
+            self.security_csv_warning_label.setWordWrap(True)
+            staged_csv_layout.addWidget(self.security_csv_warning_label)
+            delete_staged_csv = QPushButton("Delete staged NordPass CSV")
+            delete_staged_csv.setObjectName("secondaryButton")
+            delete_staged_csv.setCursor(Qt.CursorShape.PointingHandCursor)
+            delete_staged_csv.clicked.connect(
+                lambda checked=False, path=staged_path: self._delete_known_staged_csv(path)
+            )
+            delete_staged_csv.setVisible(staged_path.exists())
+            staged_csv_layout.addWidget(delete_staged_csv)
+            layout.addWidget(staged_csv_box)
             return page
 
         def _run_password_exposure_check(self, password_input=None, status_label=None, action_button=None, confirmation=None) -> None:
@@ -1672,6 +1690,16 @@ def main() -> int:
             self._password_exposure_thread = None
             self._active_password_exposure_status = None
             self._active_password_exposure_button = None
+
+        def _delete_known_staged_csv(self, path: Path) -> None:
+            deleted = delete_file(path)
+            if hasattr(self, "security_csv_warning_label"):
+                self.security_csv_warning_label.setText(
+                    "Staged NordPass CSV deleted."
+                    if deleted
+                    else "No staged NordPass CSV was found in the app data folder."
+                )
+                self.security_csv_warning_label.setObjectName("listText")
 
     app = QApplication(sys.argv)
     app.setStyleSheet(calm_shield_stylesheet())

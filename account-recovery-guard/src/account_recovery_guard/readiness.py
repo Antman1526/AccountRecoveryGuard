@@ -4,6 +4,8 @@ import os
 import shutil
 from dataclasses import dataclass
 
+from .secure_files import staged_nordpass_csv_warning
+
 
 @dataclass(frozen=True)
 class ReadinessCheck:
@@ -19,6 +21,7 @@ def build_readiness_checks(hibp_secret_name: str | None = None) -> tuple[Readine
         _bitwarden_session_check(),
         _gui_dependency_check(),
         _playwright_check(),
+        _staged_nordpass_csv_check(),
         ReadinessCheck(
             "NordPass sync",
             "manual_required",
@@ -104,6 +107,22 @@ def _playwright_check() -> ReadinessCheck:
             "Install the free browser helper with python -m pip install playwright && python -m playwright install chromium.",
         )
     return ReadinessCheck("Reset browser helper", "ready", "Playwright is available for opening reset links.")
+
+
+def _staged_nordpass_csv_check() -> ReadinessCheck:
+    warning = staged_nordpass_csv_warning()
+    if warning is None:
+        return ReadinessCheck(
+            "Staged NordPass CSV cleanup",
+            "ready",
+            "No stale plaintext NordPass import CSV was found in the app data folder.",
+        )
+    path, message = warning
+    return ReadinessCheck(
+        "Staged NordPass CSV cleanup",
+        "action_needed",
+        f"{message} Location: {path}",
+    )
 
 
 def _hibp_paid_check(hibp_secret_name: str | None) -> ReadinessCheck:
