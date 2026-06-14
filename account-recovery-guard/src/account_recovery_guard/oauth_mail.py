@@ -93,7 +93,7 @@ class MicrosoftGraphMailProvider:
         if cache.has_state_changed:
             set_secret(self.config.token_secret_name, cache.serialize())
         if "access_token" not in token:
-            raise RuntimeError(f"Microsoft Graph authentication failed: {token.get('error_description', token)}")
+            raise RuntimeError(_graph_auth_failure_message(token))
 
         since = (datetime.now(UTC) - timedelta(days=days_back)).replace(microsecond=0).isoformat().replace("+00:00", "Z")
         params = urlencode(
@@ -126,3 +126,13 @@ def _graph_item_to_message(item: dict) -> EmailMessage:
     else:
         message.set_content(content)
     return message
+
+
+def _graph_auth_failure_message(token: object) -> str:
+    error_code = ""
+    if isinstance(token, dict):
+        raw_error = str(token.get("error") or "").strip()
+        if raw_error and all(ch.isalnum() or ch in {"_", "-", "."} for ch in raw_error):
+            error_code = raw_error[:80]
+    suffix = f" ({error_code})" if error_code else ""
+    return f"Microsoft Graph authentication failed{suffix}. Try signing in again and check the Outlook setup."

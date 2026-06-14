@@ -118,6 +118,7 @@ Secrets:
 - IMAP app passwords and generated replacement passwords are stored with Python `keyring`, which uses macOS Keychain and Windows Credential Locker on those platforms.
 - `BW_SESSION` is read from the process environment only.
 - Gmail OAuth token JSON and Microsoft Graph MSAL token caches are stored through the same OS secure-store layer.
+- OAuth failure messages shown by the app are sanitized so provider token payloads are not echoed to users or logs.
 
 MFA:
 
