@@ -117,6 +117,7 @@ class NordPassImportVault:
 
     def stage_import(self, candidates: list[PasswordCandidate], destination: Path) -> Path:
         destination.parent.mkdir(parents=True, exist_ok=True)
+        _chmod_best_effort(destination.parent, 0o700)
         with NamedTemporaryFile("w", newline="", encoding="utf-8", delete=False, dir=destination.parent) as tmp:
             writer = csv.DictWriter(tmp, fieldnames=self.fieldnames)
             writer.writeheader()
@@ -132,12 +133,9 @@ class NordPassImportVault:
                     }
                 )
             tmp_path = Path(tmp.name)
-        os.chmod(tmp_path, 0o600)
+        _chmod_best_effort(tmp_path, 0o600)
         tmp_path.replace(destination)
-        try:
-            os.chmod(destination, 0o600)
-        except OSError:
-            pass
+        _chmod_best_effort(destination, 0o600)
         return destination
 
     def read_export(self, export_csv: Path) -> list[VaultEntry]:
@@ -155,3 +153,10 @@ class NordPassImportVault:
                     )
                 )
         return entries
+
+
+def _chmod_best_effort(path: Path, mode: int) -> None:
+    try:
+        os.chmod(path, mode)
+    except OSError:
+        pass
