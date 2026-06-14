@@ -4,6 +4,15 @@ from dataclasses import dataclass
 import shlex
 from typing import Any
 
+SECRET_REFERENCE_KEYS = {
+    "hibp_secret",
+    "password_secret",
+    "secret_name",
+    "token_secret_name",
+}
+
+SECRET_REFERENCE_PLACEHOLDER = "<save-secret-in-os-credential-store-first>"
+
 
 @dataclass(frozen=True)
 class RecoveryStage:
@@ -41,8 +50,42 @@ def build_command_preview(command: str, options: dict[str, Any]) -> str:
             continue
         if value is None or value == "":
             continue
-        parts.extend([flag, str(value)])
+        parts.extend([flag, safe_preview_value(key, value)])
     return " ".join(shlex.quote(part) for part in parts)
+
+
+def safe_preview_value(key: str, value: Any) -> str:
+    text = str(value)
+    if key in SECRET_REFERENCE_KEYS and looks_like_direct_secret(text):
+        return SECRET_REFERENCE_PLACEHOLDER
+    return text
+
+
+def looks_like_direct_secret(value: str) -> bool:
+    text = value.strip()
+    if not text:
+        return False
+    compact = "".join(text.split())
+    if _looks_like_google_app_password(text):
+        return True
+    if any(ch.isspace() for ch in text):
+        return True
+    if "=" in text:
+        return True
+    classes = sum(
+        (
+            any(ch.islower() for ch in text),
+            any(ch.isupper() for ch in text),
+            any(ch.isdigit() for ch in text),
+            any(not ch.isalnum() for ch in text),
+        )
+    )
+    return len(compact) >= 12 and classes >= 3
+
+
+def _looks_like_google_app_password(value: str) -> bool:
+    compact = "".join(value.split())
+    return len(compact) == 16 and compact.isalnum()
 
 
 def recovery_stages() -> list[RecoveryStage]:

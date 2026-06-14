@@ -121,6 +121,7 @@ Secrets:
 - `BW_SESSION` is read from the process environment only.
 - Gmail OAuth token JSON and Microsoft Graph MSAL token caches are stored through the same OS secure-store layer.
 - OAuth failure messages shown by the app are sanitized so provider token payloads are not echoed to users or logs.
+- Advanced GUI command previews expect saved secret names, not actual passwords or tokens. If a secret-name field looks like a direct password or token, the preview replaces it with `<save-secret-in-os-credential-store-first>`.
 
 MFA:
 
@@ -298,6 +299,7 @@ The GUI opens to a guided first-run flow:
 - Require confirmation that you are on the official site/app or verified reset page before copying a generated password.
 - Rotate passwords with masked choices, then prepare vault sync only after confirming the password was changed on the real service and the new password works.
 - Stage the NordPass import CSV from the guided rotation flow, import it immediately, verify, and delete it after use with the in-app cleanup button.
+- Keep advanced copied command previews from showing likely direct passwords or tokens in saved-secret fields.
 
 After a scan exists, the dashboard shows an account safety summary, accounts needing attention, vault sync status, cleanup reminders, and secondary advanced tools for troubleshooting.
 

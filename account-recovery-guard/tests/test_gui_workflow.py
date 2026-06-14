@@ -5,8 +5,11 @@ from account_recovery_guard.gui_workflow import password_exposure_blocked_messag
 from account_recovery_guard.gui_workflow import password_exposure_prompt_lines
 from account_recovery_guard.gui_workflow import password_exposure_ready
 from account_recovery_guard.gui_workflow import (
+    SECRET_REFERENCE_PLACEHOLDER,
+    looks_like_direct_secret,
     recovery_stages,
     rotation_copy_confirmation_text,
+    safe_preview_value,
     safe_recovery_scope_lines,
     suggested_next_actions,
     vault_sync_confirmation_texts,
@@ -21,6 +24,47 @@ def test_build_command_preview_escapes_values_for_copyable_cli():
     command = build_command_preview("rotate", {"service": "Example App", "username": "me@example.com", "open": True})
 
     assert command == "account-recovery-guard rotate --service 'Example App' --username me@example.com --open"
+
+
+def test_build_command_preview_keeps_safe_secret_reference_names():
+    command = build_command_preview(
+        "scan-imap",
+        {
+            "host": "imap.example.com",
+            "username": "me@example.com",
+            "secret_name": "gmail-imap-app-password:me@example.com",
+        },
+    )
+
+    assert "gmail-imap-app-password:me@example.com" in command
+    assert SECRET_REFERENCE_PLACEHOLDER not in command
+
+
+def test_build_command_preview_redacts_direct_secret_values():
+    command = build_command_preview(
+        "scan-imap",
+        {
+            "host": "imap.example.com",
+            "username": "me@example.com",
+            "secret_name": "abcd efgh ijkl mnop",
+        },
+    )
+
+    assert "abcd" not in command
+    assert SECRET_REFERENCE_PLACEHOLDER in command
+
+
+def test_safe_preview_value_redacts_password_and_token_like_secret_references():
+    assert safe_preview_value("password_secret", "CorrectHorseBatteryStaple!2") == SECRET_REFERENCE_PLACEHOLDER
+    assert safe_preview_value("token_secret_name", "access_token=super-secret") == SECRET_REFERENCE_PLACEHOLDER
+    assert safe_preview_value("service", "CorrectHorseBatteryStaple!2") == "CorrectHorseBatteryStaple!2"
+
+
+def test_direct_secret_detection_avoids_plain_saved_secret_names():
+    assert looks_like_direct_secret("mail-password-or-token") is False
+    assert looks_like_direct_secret("gmail-imap-app-password:you@gmail.com") is False
+    assert looks_like_direct_secret("abcd efgh ijkl mnop") is True
+    assert looks_like_direct_secret("CorrectHorseBatteryStaple!2") is True
 
 
 def test_recovery_stages_explain_original_goal_end_to_end():
