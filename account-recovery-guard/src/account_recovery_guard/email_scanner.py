@@ -86,12 +86,16 @@ class ImapEmailScanner:
         return sorted(findings, key=lambda item: item.timestamp or datetime.min.replace(tzinfo=UTC), reverse=True)
 
     def fetch_messages(self) -> list[Message]:
-        since = (datetime.now(UTC) - timedelta(days=self.config.days_back)).strftime("%d-%b-%Y")
+        effective_days_back = self.config.days_back
         messages: list[Message] = []
         with imaplib.IMAP4_SSL(self.config.host, self.config.port, timeout=30) as client:
             client.login(self.config.username, self.config.password)
             client.select(self.config.folder, readonly=True)
-            status, data = client.search(None, "SINCE", since)
+            if effective_days_back <= 0:
+                status, data = client.search(None, "ALL")
+            else:
+                since = (datetime.now(UTC) - timedelta(days=effective_days_back)).strftime("%d-%b-%Y")
+                status, data = client.search(None, "SINCE", since)
             if status != "OK":
                 raise RuntimeError(f"IMAP search failed with status {status}")
             for message_id in data[0].split():

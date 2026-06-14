@@ -49,6 +49,7 @@ def test_describe_provider_setup_keeps_gmail_plain_language():
 
     assert setup.title == "Continue with Gmail"
     assert "OAuth" not in setup.description
+    assert "app password" in setup.description
     assert setup.advanced is False
 
 
@@ -73,13 +74,40 @@ def test_scan_progress_stages_are_plain_language():
     assert all("IMAP" not in stage and "OAuth" not in stage for stage in stages)
 
 
-def test_gmail_provider_factory_explains_missing_client_secret():
+def test_gmail_provider_factory_explains_missing_app_password():
     provider, error = build_provider_or_error(MailProviderSettings(provider=MailProviderChoice.GMAIL))
 
     assert provider is None
     assert error is not None
-    assert "Gmail setup file" in error.user_message
-    assert "client_secret_file" in error.technical_details
+    assert "Gmail address" in error.user_message
+    assert "gmail_app_password" in error.technical_details
+
+
+def test_gmail_provider_factory_uses_app_password_for_full_mailbox(monkeypatch):
+    stored = {}
+
+    secure_store = types.ModuleType("account_recovery_guard.secure_store")
+    secure_store.set_secret = lambda name, value: stored.__setitem__(name, value)
+    secure_store.get_secret = lambda name: stored.get(name)
+    monkeypatch.setitem(sys.modules, "account_recovery_guard.secure_store", secure_store)
+
+    provider, error = build_provider_or_error(
+        MailProviderSettings(
+            provider=MailProviderChoice.GMAIL,
+            username="You@Gmail.com",
+            gmail_app_password="abcd efgh ijkl mnop",
+            gmail_full_mailbox=True,
+        )
+    )
+
+    assert error is None
+    assert provider is not None
+    assert provider.config.host == "imap.gmail.com"
+    assert provider.config.username == "You@Gmail.com"
+    assert provider.config.password == "abcdefghijklmnop"
+    assert provider.config.folder == "[Gmail]/All Mail"
+    assert provider.config.days_back == 0
+    assert stored["gmail-imap-app-password:you@gmail.com"] == "abcdefghijklmnop"
 
 
 def test_outlook_provider_factory_explains_missing_client_id():

@@ -22,6 +22,7 @@ class MailProvider(Protocol):
 
 SAFE_SCAN_FAILURE_MESSAGE = "The scan could not finish. Check your provider setup and try again."
 SETUP_DETAIL_MISSING_CLIENT_SECRET_FILE = "missing_client_secret_file"
+SETUP_DETAIL_MISSING_GMAIL_APP_PASSWORD = "missing_gmail_app_password"
 SETUP_DETAIL_MISSING_CLIENT_ID = "missing_client_id"
 SETUP_DETAIL_MISSING_IMAP_SETUP = "missing_imap_setup"
 SETUP_DETAIL_MISSING_SAVED_IMAP_SECRET = "missing_saved_imap_secret"
@@ -32,6 +33,7 @@ SETUP_DETAIL_SCAN_FAILED = "scan_failed"
 CONTROLLED_SETUP_DETAIL_CODES = frozenset(
     {
         SETUP_DETAIL_MISSING_CLIENT_SECRET_FILE,
+        SETUP_DETAIL_MISSING_GMAIL_APP_PASSWORD,
         SETUP_DETAIL_MISSING_CLIENT_ID,
         SETUP_DETAIL_MISSING_IMAP_SETUP,
         SETUP_DETAIL_MISSING_SAVED_IMAP_SECRET,
@@ -62,6 +64,9 @@ class MailProviderSettings:
     provider: MailProviderChoice
     username: str = ""
     days_back: int = 30
+    gmail_app_password: str = ""
+    gmail_secret_name: str = ""
+    gmail_full_mailbox: bool = True
     gmail_client_secret_file: str = ""
     graph_tenant_id: str = "common"
     graph_client_id: str = ""
@@ -86,8 +91,9 @@ def describe_provider_setup(provider: MailProviderChoice) -> ProviderSetupCopy:
     if provider == MailProviderChoice.GMAIL:
         return ProviderSetupCopy(
             title="Continue with Gmail",
-            description="Connect Gmail so Account Recovery Guard can scan account and security emails.",
+            description="Connect Gmail with a Google app password so Account Recovery Guard can scan account and security emails.",
             advanced=False,
+            technical_details="Work or school Gmail may require advanced OAuth setup instead.",
         )
     if provider == MailProviderChoice.OUTLOOK:
         return ProviderSetupCopy(
@@ -107,14 +113,55 @@ def build_provider_or_error(settings: MailProviderSettings) -> tuple[MailProvide
     if settings.provider == MailProviderChoice.GMAIL:
         client_secret_file = settings.gmail_client_secret_file.strip()
         client_secret_path = Path(client_secret_file).expanduser()
-        if not client_secret_file or not client_secret_path.exists():
-            return None, UserFacingSetupError(
-                user_message="Choose a Gmail setup file before starting the scan.",
-                technical_details=SETUP_DETAIL_MISSING_CLIENT_SECRET_FILE,
-            )
-        from .oauth_mail import GmailApiMailProvider, GmailOAuthConfig
+        if client_secret_file and client_secret_path.exists():
+            from .oauth_mail import GmailApiMailProvider, GmailOAuthConfig
 
-        return GmailApiMailProvider(GmailOAuthConfig(str(client_secret_path))), None
+            return GmailApiMailProvider(GmailOAuthConfig(str(client_secret_path))), None
+
+        username = settings.username.strip()
+        app_password = _normalize_gmail_app_password(settings.gmail_app_password)
+        secret_name = settings.gmail_secret_name.strip() or _gmail_secret_name(username)
+        if not username:
+            return None, UserFacingSetupError(
+                user_message="Enter your Gmail address before starting the scan.",
+                technical_details=SETUP_DETAIL_MISSING_GMAIL_APP_PASSWORD,
+            )
+        try:
+            from .secure_store import get_secret, set_secret
+
+            if app_password:
+                set_secret(secret_name, app_password)
+                password = app_password
+            else:
+                password = get_secret(secret_name)
+        except Exception:
+            return None, UserFacingSetupError(
+                user_message="The Gmail app password could not be saved or read. Check your credential store and try again.",
+                technical_details=SETUP_DETAIL_CREDENTIAL_STORE_UNAVAILABLE,
+            )
+        if not password:
+            return None, UserFacingSetupError(
+                user_message=(
+                    "Enter a Google app password for Gmail. Do not use your normal Google password. "
+                    "If this is a work or school account, your administrator may require OAuth setup instead."
+                ),
+                technical_details=SETUP_DETAIL_MISSING_GMAIL_APP_PASSWORD,
+            )
+
+        from .email_scanner import ImapEmailScanner, ImapMailboxConfig
+
+        return (
+            ImapEmailScanner(
+                ImapMailboxConfig(
+                    host="imap.gmail.com",
+                    username=username,
+                    password=password,
+                    days_back=0 if settings.gmail_full_mailbox else max(settings.days_back, 1),
+                    folder="[Gmail]/All Mail" if settings.gmail_full_mailbox else "INBOX",
+                )
+            ),
+            None,
+        )
 
     if settings.provider == MailProviderChoice.OUTLOOK:
         client_id = settings.graph_client_id.strip()
@@ -172,6 +219,15 @@ def build_provider_or_error(settings: MailProviderSettings) -> tuple[MailProvide
         ),
         None,
     )
+
+
+def _normalize_gmail_app_password(app_password: str) -> str:
+    return "".join(app_password.split())
+
+
+def _gmail_secret_name(username: str) -> str:
+    safe_username = username.strip().lower() or "gmail"
+    return f"gmail-imap-app-password:{safe_username}"
 
 
 class GuiScanService:

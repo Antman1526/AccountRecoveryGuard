@@ -50,6 +50,20 @@ def main() -> None:
     discover.add_argument("--folder", default="INBOX")
     discover.add_argument("--json", action="store_true")
 
+    scan_gmail_app_password = sub.add_parser(
+        "scan-gmail-app-password",
+        help="Scan Gmail with a Google app password stored in the OS credential store",
+    )
+    scan_gmail_app_password.add_argument("--username", required=True)
+    scan_gmail_app_password.add_argument("--secret-name", required=True, help="Keychain secret containing the Gmail app password")
+    scan_gmail_app_password.add_argument("--days", type=int, default=30)
+    scan_gmail_app_password.add_argument(
+        "--recent-inbox",
+        action="store_true",
+        help="Scan only recent INBOX messages. By default this scans Gmail All Mail.",
+    )
+    scan_gmail_app_password.add_argument("--json", action="store_true")
+
     scan_gmail = sub.add_parser("scan-gmail", help="Scan Gmail with OAuth and the Gmail API")
     scan_gmail.add_argument("--client-secret-file", required=True)
     scan_gmail.add_argument("--token-secret-name", default="gmail-oauth-token")
@@ -137,6 +151,8 @@ def main() -> None:
         _scan_imap(args)
     elif args.command == "discover-imap":
         _discover_imap(args)
+    elif args.command == "scan-gmail-app-password":
+        _scan_gmail_app_password(args)
     elif args.command == "scan-gmail":
         provider = GmailApiMailProvider(GmailOAuthConfig(args.client_secret_file, args.token_secret_name))
         _classify_messages(provider.fetch_messages(args.days), args)
@@ -229,6 +245,33 @@ def _discover_imap(args: argparse.Namespace) -> None:
     for account in accounts:
         print(f"[{account.confidence}] {account.service_name} ({account.sender_domain}) messages={account.message_count}")
         print(f"  reasons: {', '.join(account.reasons)}")
+
+
+def _scan_gmail_app_password(args: argparse.Namespace) -> None:
+    password = get_secret(args.secret_name)
+    if not password:
+        raise SystemExit(
+            f"Secret '{args.secret_name}' was not found. Store a Google app password with: "
+            f"arg secret {args.secret_name} <16-character-app-password>"
+        )
+    scanner = ImapEmailScanner(
+        ImapMailboxConfig(
+            host="imap.gmail.com",
+            username=args.username,
+            password="".join(password.split()),
+            days_back=max(args.days, 1) if args.recent_inbox else 0,
+            folder="INBOX" if args.recent_inbox else "[Gmail]/All Mail",
+        )
+    )
+    findings = scanner.scan()
+    AuditLogger().write(
+        "gmail_app_password_scan",
+        username=args.username,
+        scope="recent_inbox" if args.recent_inbox else "all_mail",
+        days=args.days,
+        finding_count=len(findings),
+    )
+    _print_findings(findings, args.json)
 
 
 def _breach_check(args: argparse.Namespace) -> None:

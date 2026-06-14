@@ -50,7 +50,9 @@ The runnable implementation uses IMAP over TLS for broad compatibility. It scans
 
 It also includes linked-account discovery. This does not log in to random websites or scrape the open web. It derives likely account relationships from authorized mailbox evidence such as welcome emails, verification emails, security alerts, password resets, and receipts.
 
-For Gmail and Outlook/Microsoft 365, the more robust long-term approach is provider APIs:
+For personal Gmail, the easiest consumer setup is now Gmail IMAP with a Google app password. The app password is entered once, stored in the OS credential store, and used over IMAP/TLS to scan Gmail's All Mail folder.
+
+For Gmail and Outlook/Microsoft 365 in stricter environments, the more robust long-term approach is provider APIs:
 
 - Gmail API: best for OAuth, labels, search, and avoiding app passwords.
 - Microsoft Graph Mail API: best for Outlook/Microsoft 365 and supports mailbox message listing.
@@ -58,7 +60,9 @@ For Gmail and Outlook/Microsoft 365, the more robust long-term approach is provi
 
 Current code ships IMAP plus optional OAuth adapters:
 
-- `scan-gmail` uses Gmail API OAuth with a local browser consent flow and stores the token JSON in the OS credential store.
+- The GUI Gmail path uses `imap.gmail.com`, your Gmail address, and a Google app password. It scans `[Gmail]/All Mail` by default.
+- `scan-gmail-app-password` is the matching CLI command for personal Gmail app-password scanning.
+- `scan-gmail` uses Gmail API OAuth with a local browser consent flow and stores the token JSON in the OS credential store. Use this advanced path when app passwords are blocked.
 - `scan-graph` uses Microsoft Graph with MSAL device-code flow and stores the token cache in the OS credential store.
 - `scan-imap` remains the fallback for providers without OAuth setup.
 
@@ -173,7 +177,22 @@ Install NordPass desktop or use the NordPass web vault. Import/export remains ma
 
 ## Configure Email
 
-For IMAP:
+For Gmail personal accounts, use a Google app password instead of your normal Google password. In the GUI, choose Gmail, enter your Gmail address, paste the 16-character app password, and leave "Scan full Gmail mailbox" enabled.
+
+For the CLI:
+
+```bash
+arg secret gmail-app-password-you@gmail.com "YOUR_16_CHARACTER_GOOGLE_APP_PASSWORD"
+arg scan-gmail-app-password --username you@gmail.com --secret-name gmail-app-password-you@gmail.com
+```
+
+The default Gmail app-password scan checks `[Gmail]/All Mail`. To scan only recent Inbox messages:
+
+```bash
+arg scan-gmail-app-password --username you@gmail.com --secret-name gmail-app-password-you@gmail.com --recent-inbox --days 30
+```
+
+For generic IMAP:
 
 ```bash
 arg secret gmail-imap-app-password "YOUR_APP_PASSWORD"
@@ -200,8 +219,9 @@ arg scan-graph --tenant-id common --client-id YOUR_ENTRA_APP_CLIENT_ID --days 30
 
 Gmail notes:
 
-- Prefer OAuth/Gmail API for production.
-- If using IMAP, Google app passwords require 2-Step Verification.
+- Do not enter your normal Google password in this app.
+- Google app passwords require 2-Step Verification and may not be available for work/school accounts, accounts with only security-key 2-Step Verification, or Advanced Protection.
+- If app passwords are blocked, use the advanced OAuth/Gmail API setup.
 
 Outlook/Microsoft 365:
 

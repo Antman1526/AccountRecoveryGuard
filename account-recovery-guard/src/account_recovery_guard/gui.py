@@ -171,8 +171,13 @@ def main() -> int:
             self.setup_days_back = QSpinBox()
             self.setup_days_back.setRange(1, 3650)
             self.setup_days_back.setValue(30)
+            self.setup_gmail_app_password = QLineEdit("")
+            self.setup_gmail_app_password.setEchoMode(QLineEdit.EchoMode.Password)
+            self.setup_gmail_app_password.setPlaceholderText("16-character Google app password")
+            self.setup_gmail_full_mailbox = QCheckBox("Scan full Gmail mailbox")
+            self.setup_gmail_full_mailbox.setChecked(True)
             self.setup_gmail_client_secret_file = QLineEdit("")
-            self.setup_gmail_client_secret_file.setPlaceholderText("Path to Gmail setup JSON")
+            self.setup_gmail_client_secret_file.setPlaceholderText("Advanced OAuth JSON path, only if app password is blocked")
             self.setup_graph_tenant_id = QLineEdit("common")
             self.setup_graph_client_id = QLineEdit("")
             self.setup_graph_client_id.setPlaceholderText("Outlook application client ID")
@@ -184,7 +189,9 @@ def main() -> int:
             fields = (
                 ("Mailbox username", self.setup_username),
                 ("Days to scan", self.setup_days_back),
-                ("Gmail setup file", self.setup_gmail_client_secret_file),
+                ("Gmail app password", self.setup_gmail_app_password),
+                ("Gmail scan scope", self.setup_gmail_full_mailbox),
+                ("Advanced Gmail OAuth file", self.setup_gmail_client_secret_file),
                 ("Outlook tenant", self.setup_graph_tenant_id),
                 ("Outlook client ID", self.setup_graph_client_id),
                 ("IMAP host", self.setup_imap_host),
@@ -196,7 +203,7 @@ def main() -> int:
             setup.body.addLayout(form)
             setup.body.addWidget(
                 self._body_label(
-                    "Use a saved secret name for other email. Do not paste an IMAP password into this screen.",
+                    "For Gmail, paste a Google app password, not your normal Gmail password. It is saved to the OS credential store and the field is cleared after setup. Work or school Gmail may require OAuth instead.",
                     "listText",
                 )
             )
@@ -228,6 +235,8 @@ def main() -> int:
                 provider=self.state.mail_provider,
                 username=self.setup_username.text(),
                 days_back=self.setup_days_back.value(),
+                gmail_app_password=self.setup_gmail_app_password.text(),
+                gmail_full_mailbox=self.setup_gmail_full_mailbox.isChecked(),
                 gmail_client_secret_file=self.setup_gmail_client_secret_file.text(),
                 graph_tenant_id=self.setup_graph_tenant_id.text(),
                 graph_client_id=self.setup_graph_client_id.text(),
@@ -235,6 +244,8 @@ def main() -> int:
                 imap_secret_name=self.setup_imap_secret_name.text(),
             )
             provider, error = build_provider_or_error(settings)
+            if hasattr(self, "setup_gmail_app_password"):
+                self.setup_gmail_app_password.clear()
             if error is not None:
                 self._show_user_error(error.user_message, error.technical_details)
                 return
