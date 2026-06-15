@@ -1,0 +1,40 @@
+[build-system]
+requires = ["setuptools>=69", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "account-recovery-guard"
+version = "0.1.0"
+description = "Local-first account recovery and exposure-risk assistant for Bitwarden and NordPass."
+requires-python = ">=3.11"
+dependencies = [
+  "beautifulsoup4>=4.12.3",
+  "keyring>=25.2.1",
+  "playwright>=1.44.0",
+]
+
+[project.optional-dependencies]
+gui = [
+  "PySide6>=6.8.0",
+]
+oauth = [
+  "google-api-python-client>=2.140.0",
+  "google-auth-httplib2>=0.2.0",
+  "google-auth-oauthlib>=1.2.1",
+  "msal>=1.31.0",
+]
+dev = [
+  "pytest>=8.2.2",
+]
+
+[project.scripts]
+arg = "account_recovery_guard.cli:main"
+account-recovery-guard = "account_recovery_guard.cli:main"
+account-recovery-guard-gui = "account_recovery_guard.gui:main"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["src"]

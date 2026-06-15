@@ -1,1 +1,12 @@
-.worktrees/
+.venv/
+.build-venv/
+.DS_Store
+__pycache__/
+.pytest_cache/
+.superpowers/
+*.egg-info/
+dist/
+build/
+*.spec
+*.csv
+*.jsonl

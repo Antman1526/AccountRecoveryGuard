@@ -27,7 +27,7 @@ Use these controls before running release artifacts:
 - Bitwarden master passwords and `BW_SESSION` are not stored by the app.
 - Passwords, tokens, authorization headers, cookies, and email bodies are redacted from audit logs.
 - Password reset automation remains manual-safe and does not bypass MFA, CAPTCHA, passkeys, or device approval.
-- Exposure checks intentionally use reputable breach intelligence and k-anonymous password checks; the free HIBP Pwned Passwords range check does not require an API key, while optional HIBP email-breach lookup requires a paid key. The app does not crawl dark-web dumps, paste sites, criminal forums, or random pages for plaintext passwords.
+- Exposure checks use authorized mailbox evidence, optional paid HIBP email-breach lookup, and k-anonymous HIBP password checks. The free HIBP Pwned Passwords range check does not require an API key, while optional HIBP email-breach lookup requires a paid key. The app does not crawl dark-web dumps, paste sites, criminal forums, or random pages for plaintext passwords.
 - NordPass CSV import files are treated as sensitive plaintext files and should be deleted after import.
 - GitHub Actions runs tests, dependency vulnerability auditing, and artifact checksum generation.
 - Build scripts verify generated checksums and emit release artifact manifests.
